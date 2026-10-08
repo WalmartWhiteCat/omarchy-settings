@@ -413,3 +413,11 @@ hl.monitor({ output = "DP-2", mode = "preferred", position = "auto", scale = 1 }
     assert ps.monitors_lua_extras("DP-1") == ["bitdepth", "cm", "reserved_area"]
     assert ps.monitors_lua_extras("DP-2") == []
     assert ps.monitors_lua_extras("HDMI-A-1") == []
+
+
+def test_touchpad_state_comes_from_omarchy_flag(sandbox):
+    assert ps.touchpad_disabled() is False
+    f = ps.STATE / "toggles/hypr/touchpad-disabled-name"
+    f.parent.mkdir(parents=True)
+    f.write_text("some-touchpad\n")
+    assert ps.touchpad_disabled() is True

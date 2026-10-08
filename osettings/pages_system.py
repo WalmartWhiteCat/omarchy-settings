@@ -9,7 +9,8 @@ from pathlib import Path
 
 from gi.repository import Adw, GLib, Gtk, Pango
 
-from .core import (CONFIG_DIR, DEFAULT_FONT, HOME, HYPR_DIR, OMARCHY_PATH, SHELL_JSON, Page, backup, clear_group,
+from .core import (CONFIG_DIR, DEFAULT_FONT, HOME, HYPR_DIR, OMARCHY_PATH, SHELL_JSON, STATE, Page, backup,
+                   clear_group,
                    combo_row, confirm, group_add, gsetting, hypr_json, icon_button, read_json, reset_group, run,
                    run_async, run_chain, run_ok, scale_row, spawn_detached, spin_row, switch_row, write_atomic)
 from .pages_look import apply_pins
@@ -462,6 +463,11 @@ class NightLightPage(Page):
 # ---------------------------------------------------------------- input
 
 
+def touchpad_disabled():
+    """Omarchy's touchpad toggle records the disabled device in this file."""
+    return (STATE / "toggles/hypr/touchpad-disabled-name").exists()
+
+
 def xkb_layouts():
     out = []
     try:
@@ -597,7 +603,7 @@ class InputPage(Page):
             self.add_reset()
             return
         g = Adw.PreferencesGroup(title="Touchpad")
-        g.add(switch_row("Touchpad enabled", None, True,
+        g.add(switch_row("Touchpad enabled", None, not touchpad_disabled(),
                          lambda v: run_async(["omarchy", "toggle", "touchpad", "on" if v else "off"])))
         g.add(switch_row("Natural scrolling", None, s.current("input:touchpad:natural_scroll", False),
                          setter("input:touchpad:natural_scroll")))
@@ -647,6 +653,8 @@ class InputPage(Page):
         self.win.store.set("input:kb_options", ",".join(opts))
 
     def reset(self, done=None):
+        if touchpad_disabled():
+            run_async(["omarchy", "toggle", "touchpad", "on"])
         self.win.store.reset(prefix="input:")
         self.win.store.schedule_save(after=lambda: (self.rebuild(), done and done()))
 
