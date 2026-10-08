@@ -313,3 +313,46 @@ def test_save_warns_once_when_require_is_commented_out(make_store, monkeypatch):
     warnings = [r for r in results if r and "commented out" in r]
     assert len(warnings) == 1
     assert store_mod.HYPR_MAIN.read_text() == f'-- {store_mod.REQUIRE_LINE}\n'
+
+
+def test_write_error_releases_waiters_and_reports(make_store, monkeypatch):
+    st = make_store()
+
+    def boom(path, text):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(store_mod, "write_atomic", boom)
+    ran = []
+    st.schedule_save(after=lambda: ran.append(1))
+    st.save_now()
+    assert ran == [1]
+    assert any(r and "disk full" in r for r in st.results)
+
+
+def test_saves_are_atomic(make_store, monkeypatch):
+    written = []
+    real = store_mod.write_atomic
+    monkeypatch.setattr(store_mod, "write_atomic", lambda p, t: (written.append(p), real(p, t)))
+    make_store({"hyprland": {"general:gaps_in": 2}}).save_now()
+    assert store_mod.SETTINGS_FILE in written and store_mod.HYPR_LUA in written
+
+
+@pytest.mark.parametrize("data", [
+    {"rules": [{"class": "steam", "workspace": "special:steam"}]},
+    {"cursor": {"size": "24px"}},
+    {"monitors": {"DP-1": {"x": "left", "mode": "preferred"}}},
+    {"animations": {"factor": "fast"}},
+    {"binds": {"custom": [{"keys": 5, "command": "x"}], "rebinds": [{"old": "A"}]}},
+    {"autostart": [{"command": None}, "foo"]},
+    {"rules": [None, {"class": "x", "opacity_active": "half"}]},
+])
+def test_bad_entries_never_stop_the_app(make_store, data):
+    st = make_store(data)
+    lua = st.render_lua()
+    assert luac_error(lua) is None
+
+
+def test_named_workspace_rule_is_kept():
+    line = store_mod.Store.rule_lua({"class": "steam", "workspace": "special:steam"})
+    assert 'workspace = "special:steam"' in line
+    assert 'workspace = "3"' in store_mod.Store.rule_lua({"class": "x", "workspace": 3.0})

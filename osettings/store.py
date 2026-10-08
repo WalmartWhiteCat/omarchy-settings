@@ -102,9 +102,63 @@ class Store:
                 self.binds[key] = []
         if not isinstance(self.binds.get("disabled_info"), dict):
             self.binds["disabled_info"] = {}  # turned-off keys -> what was on them then
+        dropped = self._clean()
+        if dropped:
+            self.load_warning = self.load_warning or (
+                f"Ignored {dropped} unreadable entr{'y' if dropped == 1 else 'ies'} in settings.json")
         self._pending = None
         self._after_save = []
         self._warned_disabled = False
+
+    def _clean(self):
+        """Drop entries the Lua generator can't handle, so a bad settings.json can't stop the
+        app from starting. Returns how many were dropped."""
+        def num(v, kind=float):
+            try:
+                kind(v)
+                return True
+            except (TypeError, ValueError):
+                return False
+
+        dropped = 0
+
+        def keep(items, ok):
+            nonlocal dropped
+            good = [x for x in items if ok(x)]
+            dropped += len(items) - len(good)
+            return good
+
+        self.rules = keep(self.rules, lambda r: isinstance(r, dict) and isinstance(r.get("class"), str)
+                          and all(r.get(k) is None or num(r[k]) for k in ("opacity_active", "opacity_inactive")))
+        self.autostart = keep(self.autostart, lambda a: isinstance(a, dict) and isinstance(a.get("command"), str))
+        b = self.binds
+        b["disabled"] = keep(b["disabled"], lambda k: isinstance(k, str))
+        b["rebinds"] = keep(b["rebinds"], lambda r: isinstance(r, dict) and all(
+            isinstance(r.get(k), str) for k in ("old", "new", "line")))
+        b["custom"] = keep(b["custom"], lambda c: isinstance(c, dict) and isinstance(c.get("keys"), str)
+                           and isinstance(c.get("command"), str))
+        for name in list(self.monitors):
+            m = self.monitors[name]
+            if not (isinstance(m, dict) and all(m.get(k) is None or num(m[k], int if k in ("x", "y", "transform")
+                                                                         else float)
+                                                for k in ("x", "y", "scale", "transform"))
+                    and isinstance(m.get("mode", ""), str)):
+                del self.monitors[name]
+                dropped += 1
+        if self.cursor.get("size") is not None and not num(self.cursor["size"], int):
+            self.cursor.pop("size")
+            dropped += 1
+        if self.cursor.get("theme") is not None and not isinstance(self.cursor["theme"], str):
+            self.cursor.pop("theme")
+            dropped += 1
+        if self.anim.get("factor") is not None and not num(self.anim["factor"]):
+            self.anim.pop("factor")
+            dropped += 1
+        for k in ("windows", "workspaces"):
+            if self.anim.get(k) is not None and not isinstance(self.anim[k], str):
+                self.anim.pop(k)
+                dropped += 1
+        return dropped
 
     def _load(self):
         """Read settings.json (or the legacy file). An unreadable settings.json is set aside, not lost."""
@@ -383,8 +437,10 @@ class Store:
             fields["float"] = True
         if r.get("no_blur"):
             fields["no_blur"] = True
-        if r.get("workspace"):
-            fields["workspace"] = str(int(r["workspace"]))
+        ws = r.get("workspace")
+        if ws:
+            # A number from the app, or a name Hyprland understands (e.g. "special:steam").
+            fields["workspace"] = str(int(ws)) if isinstance(ws, (int, float)) or str(ws).isdigit() else str(ws)
         if len(fields) == 1:
             return None
         return f"hl.window_rule({lua_value(fields)})"
