@@ -122,11 +122,74 @@ def test_settings_json_preferred_over_legacy(make_store):
     assert make_store().values == {"a:b": 2}
 
 
-def test_corrupt_settings_falls_back_to_legacy(make_store):
+def test_corrupt_settings_is_set_aside_not_lost(make_store):
+    # A damaged settings.json must not be silently overwritten, nor stale legacy data revived.
     store_mod.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     store_mod.SETTINGS_FILE.write_text("{not json")
     store_mod.LEGACY_FILE.write_text(json.dumps({"hyprland": {"a:b": 3}}))
-    assert make_store().values == {"a:b": 3}
+    st = make_store()
+    assert st.values == {}
+    assert "couldn't be read" in st.load_warning
+    broken = list(store_mod.CONFIG_DIR.glob("settings.json.broken-*"))
+    assert len(broken) == 1 and broken[0].read_text() == "{not json"
+    assert not store_mod.SETTINGS_FILE.exists()
+
+
+def test_settings_that_are_not_an_object_are_set_aside(make_store):
+    store_mod.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    store_mod.SETTINGS_FILE.write_text("[1, 2]")
+    st = make_store()
+    assert st.values == {} and st.load_warning
+    assert list(store_mod.CONFIG_DIR.glob("settings.json.broken-*"))
+
+
+def test_wrong_types_are_ignored_not_fatal(make_store):
+    st = make_store({"hyprland": [], "binds": {"disabled": "x", "custom": None}, "rules": {},
+                     "monitors": {"DP-1": {"enabled": True}}})
+    assert st.values == {} and st.rules == [] and st.monitors == {"DP-1": {"enabled": True}}
+    assert st.binds == {"disabled": [], "rebinds": [], "custom": []}
+    assert "hyprland" in st.load_warning
+    assert luac_error(st.render_lua()) is None
+
+
+def test_invalid_lua_saves_nothing_and_releases_waiters(make_store, monkeypatch):
+    st = make_store({"hyprland": {"general:gaps_in": 4}})
+    st.save_now()
+    good_json, good_lua = store_mod.SETTINGS_FILE.read_text(), store_mod.HYPR_LUA.read_text()
+    monkeypatch.setattr(store_mod, "lua_syntax_error", lambda text: "boom")
+    st.values["general:gaps_in"] = 9
+    ran = []
+    st.schedule_save(after=lambda: ran.append(1))
+    st.save_now()
+    assert ran == [1]  # a "Restore all" chain waiting on this save keeps going
+    assert store_mod.SETTINGS_FILE.read_text() == good_json
+    assert store_mod.HYPR_LUA.read_text() == good_lua
+    assert any(r and "invalid" in r for r in st.results)
+
+
+def test_refresh_rebinds_updates_and_drops():
+    st = store_mod.Store(lambda e: None)
+    st.binds["rebinds"] = [
+        {"old": "SUPER + A", "new": "SUPER + F1", "line": 'o.bind("SUPER + A", "Apps", "old-cmd")',
+         "description": "Apps"},
+        {"old": "SUPER + B", "new": "SUPER + F2", "line": 'o.bind("SUPER + B", "Gone", "x")',
+         "description": "Gone"},
+        {"old": "SUPER + C", "new": "SUPER + F3", "line": 'o.bind("SUPER + C", "Same", "y")',
+         "description": "Same"},
+    ]
+    defaults = [
+        {"keys": "SUPER + A", "description": "Apps", "line": 'o.bind("SUPER + A", "Apps", "new-cmd")',
+         "rebindable": True},
+        {"keys": "SUPER + B", "description": "Something else now", "line": 'o.bind("SUPER + B", "S", "z")',
+         "rebindable": True},
+        {"keys": "SUPER + C", "description": "Same", "line": 'o.bind("SUPER + C", "Same", "y")',
+         "rebindable": True},
+    ]
+    changed, dropped = st.refresh_rebinds(defaults)
+    assert changed and dropped == ["Gone"]
+    assert [r["old"] for r in st.binds["rebinds"]] == ["SUPER + A", "SUPER + C"]
+    assert "new-cmd" in st.binds["rebinds"][0]["line"]
+    assert st.refresh_rebinds(defaults) == (False, [])
 
 
 def test_save_writes_lua_requires_and_reloads(make_store, sandbox):

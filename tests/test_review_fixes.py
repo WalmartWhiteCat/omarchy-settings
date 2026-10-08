@@ -1,0 +1,292 @@
+"""Fixes from the UI and robustness review: displays, layouts, bar widgets, toggles."""
+
+import json
+
+import pytest
+
+from osettings import pages_system as ps
+from osettings import store as store_mod
+
+from .conftest import REAL_POPEN
+
+
+class FakeWin:
+    def __init__(self, store=None):
+        self.toasts = []
+        self.store = store
+
+    def toast(self, msg):
+        self.toasts.append(msg)
+
+    busy = toast
+
+
+class FakeButton:
+    def __init__(self):
+        self.sensitive = None
+
+    def set_sensitive(self, v):
+        self.sensitive = v
+
+
+class FakeDialog:
+    def __init__(self, on_yes, on_no):
+        self.on_yes, self.on_no, self.closed = on_yes, on_no, False
+
+    def force_close(self):
+        self.closed = True
+
+    def set_body(self, _):
+        pass
+
+
+# ------------------------------------------------------------------ keyboard layouts
+
+
+@pytest.mark.parametrize("layouts, variants, expected", [
+    ("us", "", ("us", "", False)),
+    ("de,ru", "", ("de,ru", "", False)),
+    ("ru", "", ("us,ru", "", True)),
+    ("ru,de", "phonetic,nodeadkeys", ("de,ru", "nodeadkeys,phonetic", True)),
+    ("ua,ru", "", ("us,ua,ru", "", True)),
+    ("gr", "polytonic", ("us,gr", ",polytonic", True)),
+])
+def test_latin_layout_goes_first(layouts, variants, expected):
+    assert ps.latin_first(layouts, variants) == expected
+
+
+def test_non_latin_list_is_read_from_omarchy(sandbox):
+    f = sandbox.omarchy / "default/hypr/input.lua"
+    f.parent.mkdir(parents=True)
+    f.write_text('local non_latin_layouts =\n  " ru xx "\n')
+    assert ps.non_latin_layouts() == {"ru", "xx"}
+
+
+# ------------------------------------------------------------------ displays
+
+
+MON = {"name": "DP-1", "description": "Test", "width": 2560, "height": 1440, "refreshRate": 143.99,
+       "x": 0, "y": 0, "scale": 1.0, "transform": 0, "disabled": False,
+       "availableModes": ["2560x1440@143.99Hz", "1920x1080@60.00Hz", "2560x1440@59.95Hz"]}
+
+
+def test_monitor_modes_best_first():
+    assert ps.monitor_modes(MON) == ["2560x1440@143.99", "2560x1440@59.95", "1920x1080@60.00"]
+
+
+def test_screen_that_is_off_uses_a_real_mode():
+    page = ps.DisplaysPage.__new__(ps.DisplaysPage)
+    page.draft = {"DP-1": None}
+    off = dict(MON, width=0, height=0, refreshRate=0.0, disabled=True)
+    e = ps.DisplaysPage.entry(page, off)
+    assert e["mode"] == "2560x1440@143.99" and e["enabled"] is False
+    no_modes = dict(off, availableModes=[])
+    assert ps.DisplaysPage.entry(page, no_modes)["mode"] == "preferred"
+    assert ps.mode_size("preferred") == (0, 0)
+
+
+def make_display_page(store, monkeypatch, live=(MON,)):
+    page = ps.DisplaysPage.__new__(ps.DisplaysPage)
+    page.win = FakeWin(store)
+    page.live = list(live)
+    page.apply_btn = FakeButton()
+    page.draft = {m["name"]: None for m in live}
+    page.rows = {}
+    for m in live:
+        page.rows[m["name"]] = {"entry": ps.DisplaysPage.entry(page, m)}
+    page.rebuilt = []
+    monkeypatch.setattr(page, "rebuild", lambda delay=0: page.rebuilt.append(delay), raising=False)
+    dialogs = []
+
+    def fake_confirm(win, heading, body, on_yes, label="", destructive=True, on_no=None):
+        d = FakeDialog(on_yes, on_no)
+        dialogs.append(d)
+        return d
+
+    monkeypatch.setattr(ps, "confirm", fake_confirm)
+    monkeypatch.setattr(ps.GLib, "timeout_add", lambda *a: 0)
+    return page, dialogs
+
+
+def test_apply_is_a_live_trial_until_kept(make_store, sandbox, monkeypatch):
+    st = make_store()
+    page, dialogs = make_display_page(st, monkeypatch)
+    page.draft["DP-1"] = dict(page.rows["DP-1"]["entry"], scale=1.25)
+    ps.DisplaysPage.apply(page)
+
+    marker = store_mod.CONFIG_DIR / ps.TRIAL_MARKER_NAME
+    assert marker.exists()
+    watchdog = sandbox.spawn[-1]
+    assert watchdog[:3] == ["sh", "-c", ps.WATCHDOG] and watchdog[4] == str(marker)
+    evals = [c for c in sandbox.run_async if c[:2] == ["hyprctl", "eval"]]
+    assert evals and "scale = 1.25" in evals[-1][2]
+    assert st.monitors == {} and not store_mod.HYPR_LUA.exists()  # nothing saved yet
+
+    dialogs[-1].on_yes()  # Keep changes
+    assert not marker.exists()
+    assert st.monitors["DP-1"]["scale"] == 1.25
+    assert "scale = 1.25" in store_mod.HYPR_LUA.read_text()
+
+
+def test_revert_reloads_and_saves_nothing(make_store, sandbox, monkeypatch):
+    st = make_store()
+    page, dialogs = make_display_page(st, monkeypatch)
+    page.draft["DP-1"] = dict(page.rows["DP-1"]["entry"], scale=2)
+    ps.DisplaysPage.apply(page)
+    dialogs[-1].on_no()
+    assert ["hyprctl", "reload"] in sandbox.run_async
+    assert st.monitors == {} and not store_mod.HYPR_LUA.exists()
+    assert not (store_mod.CONFIG_DIR / ps.TRIAL_MARKER_NAME).exists()
+    dialogs[-1].on_yes()  # a late "keep" after reverting must not save
+    assert st.monitors == {}
+
+
+def test_watchdog_script_only_reloads_while_marker_exists(tmp_path):
+    marker = tmp_path / "trial"
+    log = tmp_path / "log"
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "hyprctl").write_text(f"#!/bin/sh\necho \"$@\" >> {log}\n")
+    (fake / "hyprctl").chmod(0o755)
+    env = {"PATH": f"{fake}:/usr/bin:/bin"}  # a fake hyprctl shadows the real one
+
+    def watchdog():
+        # The harness blocks real commands; this one only reaches the fake hyprctl above.
+        assert REAL_POPEN(["sh", "-c", ps.WATCHDOG, "sh", str(marker), "0"], env=env).wait() == 0
+
+    marker.write_text("x")
+    watchdog()
+    assert log.read_text().strip() == "reload" and not marker.exists()
+    watchdog()
+    assert log.read_text().strip() == "reload"  # no marker: no second reload
+
+
+def test_scale_fix_after_resolution_change_lands_in_draft(monkeypatch):
+    page = ps.DisplaysPage.__new__(ps.DisplaysPage)
+    page.draft = {"DP-1": None}
+    e = ps.DisplaysPage.entry(page, MON)
+    e["scale"] = 2.4  # valid for 1920x1080, not for 2560x1440
+
+    class Row:
+        values = None
+
+        def set_model(self, m):
+            self.n = m.get_n_items()
+
+        def set_selected(self, i):
+            self.i = i
+
+        def get_selected(self):
+            return self.i
+
+    page.rows = {"DP-1": {"entry": e, "scale": Row()}}
+    page.draft["DP-1"] = e  # what change() does on the first edit
+    e["mode"] = "2560x1440@143.99"
+    ps.DisplaysPage.refresh_scales(page, "DP-1")
+    assert page.draft["DP-1"]["scale"] in ps.valid_scales(2560, 1440)
+
+
+# ------------------------------------------------------------------ bar widgets
+
+
+def test_removing_a_multi_purpose_widget_only_takes_it_off_the_bar(sandbox):
+    ps.SHELL_JSON.parent.mkdir(parents=True, exist_ok=True)
+    ps.SHELL_JSON.write_text(json.dumps({"bar": {"layout": {
+        "left": [{"id": "omarchy.menu"}, {"id": "omarchy.workspaces"}], "center": ["omarchy.menu"], "right": []}}}))
+    page = ps.BarPage.__new__(ps.BarPage)
+    page.win = FakeWin()
+    page.catalog = {"omarchy.menu": {"kinds": ["menu", "bar-widget"]},
+                    "omarchy.clock": {"kinds": ["bar-widget"]}}
+    page.populate_widgets = lambda: None
+    ps.BarPage.remove(page, "omarchy.menu")
+    layout = json.loads(ps.SHELL_JSON.read_text())["bar"]["layout"]
+    assert layout == {"left": [{"id": "omarchy.workspaces"}], "center": [], "right": []}
+    assert not any("disable" in c for c in sandbox.all_cmds())
+
+    ps.BarPage.remove(page, "omarchy.clock")  # a plain widget still goes through Omarchy
+    assert ["omarchy", "plugin", "disable", "omarchy.clock"] in sandbox.run_chain[-1]
+
+
+# ------------------------------------------------------------------ switches set, not flip
+
+
+def test_flag_switch_only_toggles_when_state_differs(sandbox, monkeypatch):
+    page = ps.PowerPage.__new__(ps.PowerPage)
+    captured = {}
+    monkeypatch.setattr(ps, "switch_row", lambda t, s, active, cb: captured.setdefault("cb", cb))
+    flag_off = {"v": False}
+    monkeypatch.setattr(ps, "run_ok", lambda cmd: flag_off["v"])
+    ps.PowerPage.flag_row(page, "Screensaver", None, "screensaver-off", ["omarchy", "toggle", "screensaver"])
+    captured["cb"](True)  # already on (flag not set): nothing to do
+    assert sandbox.run_async == []
+    captured["cb"](False)
+    assert sandbox.run_async == [["omarchy", "toggle", "screensaver"]]
+
+
+# ------------------------------------------------------------------ keybinding conflicts
+
+
+from osettings import pages_keys as pk  # noqa: E402
+from osettings import pages_look as pl  # noqa: E402
+
+CLOSE = {"keys": "SUPER + W", "description": "Close window", "line": 'o.bind("SUPER + W", "Close window", "x")',
+         "rebindable": True, "group": "tiling"}
+TERM = {"keys": "SUPER + RETURN", "description": "Terminal", "line": 'o.bind("SUPER + RETURN", "Terminal", "t")',
+        "rebindable": True, "group": "applications"}
+
+
+def keys_page(make_store):
+    page = pk.KeysPage.__new__(pk.KeysPage)
+    page.win = FakeWin(make_store())
+    page.defaults = [dict(CLOSE), dict(TERM)]
+    page.saved = lambda msg: page.win.toasts.append(msg)
+    return page
+
+
+def test_moving_a_default_onto_anothers_key_turns_that_one_off(make_store):
+    page = keys_page(make_store)
+    close, term = page.defaults
+    clash = pk.KeysPage.take_over(page, "SUPER + W", ignore=term)
+    page.win.store.binds["rebinds"].append({"old": term["keys"], "new": "SUPER + W", "line": term["line"],
+                                            "description": "Terminal"})
+    assert clash["ref"] is close
+    assert page.win.store.binds["disabled"] == ["SUPER + W"]
+    # The page now says who really owns the key.
+    assert pk.KeysPage.who_uses(page, "SUPER + W")["ref"] is term
+    assert any("turned off" in t for t in page.win.toasts)
+
+
+def test_custom_shortcut_on_a_default_key_turns_the_default_off(make_store):
+    page = keys_page(make_store)
+    pk.KeysPage.take_over(page, "SUPER + RETURN")
+    assert "SUPER + RETURN" in page.win.store.binds["disabled"]
+
+
+def test_turning_on_or_restoring_refuses_a_taken_key(make_store):
+    page = keys_page(make_store)
+    close, term = page.defaults
+    binds = page.win.store.binds
+    binds["disabled"].append("SUPER + W")
+    binds["custom"].append({"keys": "SUPER + W", "command": "foo", "description": "Mine", "enabled": True})
+    pk.KeysPage.set_disabled(page, close, False)
+    assert binds["disabled"] == ["SUPER + W"]  # still off
+    assert any("Mine" in t for t in page.win.toasts)
+
+    binds["custom"][0]["enabled"] = False
+    pk.KeysPage.set_disabled(page, close, False)
+    assert binds["disabled"] == []
+
+    binds["rebinds"].append({"old": "SUPER + RETURN", "new": "SUPER + F1", "line": TERM["line"],
+                             "description": "Terminal"})
+    binds["custom"].append({"keys": "SUPER + RETURN", "command": "bar", "description": "Other", "enabled": True})
+    pk.KeysPage.restore_default(page, term)
+    assert len(binds["rebinds"]) == 1  # refused: the original key is taken
+
+
+def test_unique_path(tmp_path):
+    a = tmp_path / "wall.png"
+    assert pl.unique_path(a) == a
+    a.write_text("1")
+    assert pl.unique_path(a) == tmp_path / "wall-2.png"
+    (tmp_path / "wall-2.png").write_text("2")
+    assert pl.unique_path(a) == tmp_path / "wall-3.png"
