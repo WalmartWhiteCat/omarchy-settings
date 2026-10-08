@@ -313,12 +313,9 @@ class NightLightPage(Page):
     def build(self):
         store = self.win.store
         nl = store.nightlight
-        try:
-            status = json.loads(run(["omarchy", "toggle", "nightlight", "--status"]))
-        except Exception:
-            status = {}
+        self._temp_timer = None
         g = Adw.PreferencesGroup(title="Night light", description="Warms the screen to reduce blue light.")
-        self.on = switch_row("Night light", "Turn it on now", status.get("enabled"), self.toggle)
+        self.on = switch_row("Night light", "Turn it on now", self.is_on(), self.toggle)
         g.add(self.on)
         self.temp = scale_row("Warmth", "Color temperature in Kelvin: lower is warmer", 2500, 6000, 100,
                               nl.get("temperature", 4000), 0, self.set_temp)
@@ -339,22 +336,42 @@ class NightLightPage(Page):
                              "Turns night light off, sets warmth back to 4000 K and removes the schedule.",
                              self.reset))
 
+    @staticmethod
+    def is_on():
+        try:
+            return bool(json.loads(run(["omarchy", "toggle", "nightlight", "--status"])).get("enabled"))
+        except Exception:
+            return False
+
     def toggle(self, on):
         temp = int(self.win.store.nightlight.get("temperature", 4000))
 
-        def done(*_):
+        def warm(*_):
             if on and temp != 4000:
                 run_async(["hyprctl", "hyprsunset", "temperature", str(temp)])
 
-        run_async(["omarchy", "toggle", "nightlight"], done)
+        # `omarchy toggle nightlight` flips the state, so only call it when it differs.
+        if self.is_on() != on:
+            run_async(["omarchy", "toggle", "nightlight"], warm)
+        else:
+            warm()
 
     def set_temp(self, v):
         self.win.store.nightlight["temperature"] = int(v)
-        self.win.store.save_now()
         if self.on.get_active():
-            run_async(["hyprctl", "hyprsunset", "temperature", str(int(v))])
-        if self.win.store.nightlight.get("schedule"):
-            self.write_schedule()
+            run_async(["hyprctl", "hyprsunset", "temperature", str(int(v))])  # cheap: follow the slider live
+        if self._temp_timer:
+            GLib.source_remove(self._temp_timer)
+
+        def settle():
+            self._temp_timer = None
+            if self.win.store.nightlight.get("schedule"):
+                self.write_schedule()
+            else:
+                self.win.store.schedule_save()
+            return False
+
+        self._temp_timer = GLib.timeout_add(500, settle)
 
     def set_sched(self, key, value):
         if key in ("start", "end") and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", value):
@@ -390,7 +407,7 @@ class NightLightPage(Page):
         self.restore_conf()
         self.win.store.save_now()
         cmds = []
-        if self.on.get_active():
+        if self.is_on():
             cmds.append(["omarchy", "toggle", "nightlight"])
         if had_schedule:
             cmds.append(["omarchy", "restart", "hyprsunset"])
@@ -947,7 +964,13 @@ class PowerPage(Page):
 
     def flag_row(self, title, subtitle, flag, toggle_cmd):
         off = run_ok(["omarchy", "toggle", "enabled", flag])
-        return switch_row(title, subtitle, not off, lambda _v: run_async(toggle_cmd))
+
+        def set_on(on):
+            # The omarchy command flips the flag, so only run it when the state differs.
+            if run_ok(["omarchy", "toggle", "enabled", flag]) == on:
+                run_async(toggle_cmd)
+
+        return switch_row(title, subtitle, not off, set_on)
 
     def set_idle(self, key, seconds):
         data = read_shell()
