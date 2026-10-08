@@ -94,6 +94,7 @@ class Store:
         self.binds.setdefault("custom", [])
         self._pending = None
         self._after_save = []
+        self._warned_disabled = False
 
     # ------------------------------------------------------------ values
 
@@ -154,7 +155,10 @@ class Store:
             self.on_result(f"Not saved, generated config is invalid: {err}")
             return False
         HYPR_LUA.write_text(lua)
-        ensure_required()
+        if ensure_required() == "disabled" and not self._warned_disabled:
+            self._warned_disabled = True
+            self.on_result("Changes aren't being loaded: the omarchy_settings line in "
+                           "~/.config/hypr/hyprland.lua is commented out")
         callbacks, self._after_save = self._after_save, []
 
         def checked(_c, out, _e):
@@ -297,18 +301,30 @@ class Store:
         return f"hl.window_rule({lua_value(fields)})"
 
 
+ACTIVE_REQUIRE = re.compile(r'^[ \t]*require\("hypr\.omarchy_settings"\)', re.M)
+COMMENTED_REQUIRE = re.compile(r'^[ \t]*--.*require\("hypr\.omarchy_settings"\)', re.M)
+LOOKNFEEL_LINE = re.compile(r'^[ \t]*require\("hypr\.looknfeel"\)[^\n]*$', re.M)
+
+
 def ensure_required():
-    """Make hyprland.lua load our generated file (once, with a backup)."""
+    """Make hyprland.lua load our generated file (once, with a backup).
+
+    Returns "loaded" when the require line is active (or was just added), "disabled" when
+    the user commented it out (respected: we never re-add it), or None when there is no
+    hyprland.lua."""
     try:
         text = HYPR_MAIN.read_text()
     except Exception:
-        return
-    if REQUIRE_LINE in text:
-        return
+        return None
+    if ACTIVE_REQUIRE.search(text):
+        return "loaded"
+    if COMMENTED_REQUIRE.search(text):
+        return "disabled"
     shutil.copy2(HYPR_MAIN, HYPR_MAIN.with_name(f"hyprland.lua.bak.{int(time.time())}"))
-    anchor = 'require("hypr.looknfeel")'
-    if anchor in text:
-        text = text.replace(anchor, f"{anchor}\n{REQUIRE_LINE}", 1)
+    anchor = LOOKNFEEL_LINE.search(text)
+    if anchor:
+        text = text[:anchor.end()] + f"\n{REQUIRE_LINE}" + text[anchor.end():]
     else:
         text += f"\n{REQUIRE_LINE}\n"
     HYPR_MAIN.write_text(text)
+    return "loaded"
