@@ -97,6 +97,8 @@ class Store:
         for key in ("disabled", "rebinds", "custom"):
             if not isinstance(self.binds.get(key), list):
                 self.binds[key] = []
+        if not isinstance(self.binds.get("disabled_info"), dict):
+            self.binds["disabled_info"] = {}  # turned-off keys -> what was on them then
         self._pending = None
         self._after_save = []
         self._warned_disabled = False
@@ -161,11 +163,25 @@ class Store:
                 dropped.append(rb.get("description") or rb.get("old", "?"))
                 changed = True
                 continue
-            if rb.get("line") != b["line"]:
-                rb["line"] = b["line"]
+            if rb.get("line") != b["line"] or rb.get("guard") != b.get("guard"):
+                rb["line"], rb["guard"] = b["line"], b.get("guard")
                 changed = True
             kept.append(rb)
         self.binds["rebinds"] = kept
+        # A key turned off here must not quietly unbind something new Omarchy put on it later.
+        info = self.binds["disabled_info"]
+        on_key = {}
+        for b in defaults:
+            if b["line"]:
+                on_key.setdefault(b["keys"], []).append(b["description"])
+        for keys in list(self.binds["disabled"]):
+            was = info.get(keys)
+            now = on_key.get(keys)
+            if was is not None and now is not None and was not in now and was != " / ".join(now):
+                self.binds["disabled"].remove(keys)
+                info.pop(keys, None)
+                dropped.append(f"{was} (off)")
+                changed = True
         return changed, dropped
 
     def to_json(self):
@@ -275,11 +291,18 @@ class Store:
 
         for keys in self.binds["disabled"]:
             section(f"unbind {keys}", [f"hl.unbind({lua_str(keys)})"])
+        # Bindings that shared a key move together: one unbind of each key, then every line,
+        # so a later unbind of the new key can't remove an earlier sibling.
+        groups = {}
         for rb in self.binds["rebinds"]:
-            body = [f"hl.unbind({lua_str(rb['old'])})"]
-            body.append(f"hl.unbind({lua_str(rb['new'])})")
-            body.append(rb["line"].strip().replace(lua_str(rb["old"]), lua_str(rb["new"]), 1))
-            section(f"shortcut {rb['new']}", body)
+            groups.setdefault((rb["old"], rb["new"]), []).append(rb)
+        for (old, new), members in groups.items():
+            body = [f"hl.unbind({lua_str(old)})", f"hl.unbind({lua_str(new)})"]
+            for rb in members:
+                line = rb["line"].strip().replace(lua_str(old), lua_str(new), 1)
+                # keep the `if` the line sat in (e.g. only when voxtype is installed)
+                body.append(f"if {rb['guard']} then {line} end" if rb.get("guard") else line)
+            section(f"shortcut {new}", body)
         for c in self.binds["custom"]:
             if not c.get("enabled", True) or not c.get("keys") or not c.get("command"):
                 continue
@@ -356,6 +379,17 @@ class Store:
 ACTIVE_REQUIRE = re.compile(r'^[ \t]*require\("hypr\.omarchy_settings"\)', re.M)
 COMMENTED_REQUIRE = re.compile(r'^[ \t]*--.*require\("hypr\.omarchy_settings"\)', re.M)
 LOOKNFEEL_LINE = re.compile(r'^[ \t]*require\("hypr\.looknfeel"\)[^\n]*$', re.M)
+
+
+def require_state():
+    """'loaded', 'disabled' (commented out) or 'missing', without changing anything."""
+    try:
+        text = HYPR_MAIN.read_text()
+    except Exception:
+        return "missing"
+    if ACTIVE_REQUIRE.search(text):
+        return "loaded" if HYPR_LUA.exists() else "missing"
+    return "disabled" if COMMENTED_REQUIRE.search(text) else "missing"
 
 
 def ensure_required():

@@ -4,10 +4,10 @@ import re
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from .binds import FILE_TITLES, keys_from_event, normalize, parse_default_binds, pretty
-from .core import (HYPR_DIR, OMARCHY_PATH, Page, clear_group, group_add, icon_button, keycap, reset_group,
+from .binds import FILE_TITLES, bare_ok, keys_from_event, normalize, parse_default_binds, pretty, siblings
+from .core import (HYPR_DIR, OMARCHY_PATH, Page, clear_group, group_add, icon_button, keycap, reset_group, run,
                    run_async, spawn_detached)
-from .store import CAPTURE_SUBMAP
+from .store import CAPTURE_SUBMAP, require_state
 
 
 def app_choices():
@@ -148,7 +148,9 @@ class KeysPage(Page):
     key, title, icon = "keys", "Keybindings", "preferences-desktop-keyboard-shortcuts-symbolic"
 
     def build(self):
-        self.defaults = parse_default_binds()
+        binds = self.win.store.binds
+        owned = {normalize(c["keys"]) for c in binds["custom"]} | {normalize(r["new"]) for r in binds["rebinds"]}
+        self.defaults = parse_default_binds(owned=owned, disabled_info=binds["disabled_info"])
         top = Adw.PreferencesGroup()
         box = Gtk.Box(spacing=8)
         self.search = Gtk.SearchEntry(placeholder_text="Search shortcuts", hexpand=True)
@@ -172,8 +174,8 @@ class KeysPage(Page):
             if not g:
                 g = groups[b["group"]] = Adw.PreferencesGroup(title=FILE_TITLES.get(b["group"], b["group"]))
                 if b["group"] == "other":
-                    g.set_description("Built by Omarchy in loops or scripts: view only. Turn them off by "
-                                      "unbinding in ~/.config/hypr/bindings.lua.")
+                    g.set_description("Made by Omarchy in loops or scripts, or by your own "
+                                      "~/.config/hypr/bindings.lua. These can be turned off and on, not changed.")
             row = self.default_row(b)
             g.add(row)
             self.rows.append(row)
@@ -198,7 +200,8 @@ class KeysPage(Page):
         for c in binds["custom"]:
             if c.get("enabled", True):
                 out.append({"keys": c["keys"], "description": c.get("description", ""), "kind": "custom", "ref": c})
-        return [e for e in out if e["ref"] is not ignore]
+        skip = ignore if isinstance(ignore, list) else [ignore]
+        return [e for e in out if not any(e["ref"] is s for s in skip)]
 
     def who_uses(self, keys, ignore=None):
         n = normalize(keys)
@@ -218,7 +221,7 @@ class KeysPage(Page):
             row.set_subtitle(f"Changed from {pretty(b['keys'])}")
         row.add_suffix(keycap(pretty(rb["new"] if rb else b["keys"])))
         row.search_text = f"{b['description']} {b['keys']} {pretty(b['keys'])} {rb['new'] if rb else ''}".lower()
-        if b["line"]:
+        if b["line"] or b["group"] == "other":
             menu = Gtk.MenuButton(icon_name="view-more-symbolic", valign=Gtk.Align.CENTER)
             menu.add_css_class("flat")
             menu.set_create_popup_func(lambda m, b=b: m.set_popover(self.menu_for(b)))
@@ -238,14 +241,17 @@ class KeysPage(Page):
             btn.connect("clicked", lambda *_: (pop.popdown(), fn()))
             box.append(btn)
 
-        if b["rebindable"] and not off:
-            item("Change shortcut…", lambda: self.change_default(b))
+        group = siblings(self.defaults, b)
+        others = [g["description"] for g in group if g is not b]
+        also = f" (also {', '.join(others)})" if others else ""
+        if all(g["rebindable"] for g in group) and b["line"] and not off:
+            item(f"Change shortcut…{also}", lambda: self.change_default(b))
         if rb:
-            item("Restore Omarchy's shortcut", lambda: self.restore_default(b))
+            item(f"Restore Omarchy's shortcut{also}", lambda: self.restore_default(b))
         if off:
-            item("Turn on", lambda: self.set_disabled(b, False))
+            item(f"Turn on{also}", lambda: self.set_disabled(b, False))
         else:
-            item("Turn off", lambda: self.set_disabled(b, True))
+            item(f"Turn off{also}", lambda: self.set_disabled(b, True))
         return pop
 
     def populate_custom(self):
@@ -290,33 +296,41 @@ class KeysPage(Page):
         if clash["kind"] == "custom":
             clash["ref"]["enabled"] = False
         else:
-            b = clash["ref"]
-            binds = self.win.store.binds
-            binds["rebinds"] = [r for r in binds["rebinds"] if r["old"] != b["keys"]]
-            if b["keys"] not in binds["disabled"]:
-                binds["disabled"].append(b["keys"])
+            self.turn_off_key(clash["ref"])
         self.win.toast(f"“{clash['description'] or clash['keys']}” was turned off: its key is used now")
         return clash
 
+    def turn_off_key(self, b):
+        """Turn off `b` and every Omarchy binding sharing its key (Hyprland unbinds keys whole)."""
+        binds = self.win.store.binds
+        group = siblings(self.defaults, b)
+        binds["rebinds"] = [r for r in binds["rebinds"] if r["old"] != b["keys"]]
+        if b["keys"] not in binds["disabled"]:
+            binds["disabled"].append(b["keys"])
+        binds["disabled_info"][b["keys"]] = " / ".join(g["description"] for g in group)
+
     def key_taken(self, b):
         """Refuse to bring `b` back on its original key while another shortcut uses it."""
-        clash = self.who_uses(b["keys"], ignore=b)
+        clash = self.who_uses(b["keys"], ignore=siblings(self.defaults, b))
         if clash:
             self.win.toast(f"{pretty(b['keys'])} is used by “{clash['description'] or clash['keys']}”. "
                            "Change or turn that off first.")
         return clash
 
     def change_default(self, b):
+        group = siblings(self.defaults, b)
+
         def done(res):
             binds = self.win.store.binds
             binds["rebinds"] = [r for r in binds["rebinds"] if r["old"] != b["keys"]]
             if normalize(res["keys"]) != normalize(b["keys"]):
-                self.take_over(res["keys"], b)
-                binds["rebinds"].append({"old": b["keys"], "new": res["keys"], "line": b["line"],
-                                         "description": b["description"]})
+                self.take_over(res["keys"], group)
+                for g in group:  # bindings sharing the key move together
+                    binds["rebinds"].append({"old": g["keys"], "new": res["keys"], "line": g["line"],
+                                             "guard": g.get("guard"), "description": g["description"]})
             self.saved(f"“{b['description']}” is now {pretty(res['keys'])}")
 
-        ShortcutDialog(self, f"Change “{b['description']}”", done, ignore=b).present(self.win)
+        ShortcutDialog(self, f"Change “{b['description']}”", done, ignore=group).present(self.win)
 
     def restore_default(self, b):
         if self.key_taken(b):
@@ -329,10 +343,11 @@ class KeysPage(Page):
         if not off and self.key_taken(b):
             return
         binds = self.win.store.binds
-        binds["disabled"] = [k for k in binds["disabled"] if k != b["keys"]]
         if off:
-            binds["disabled"].append(b["keys"])
-            binds["rebinds"] = [r for r in binds["rebinds"] if r["old"] != b["keys"]]
+            self.turn_off_key(b)
+        else:
+            binds["disabled"] = [k for k in binds["disabled"] if k != b["keys"]]
+            binds["disabled_info"].pop(b["keys"], None)
         self.saved(f"“{b['description']}” turned {'off' if off else 'on'}")
 
     def add_custom(self):
@@ -362,7 +377,7 @@ class KeysPage(Page):
         self.saved("Shortcut deleted")
 
     def reset(self, done=None):
-        self.win.store.binds = {"disabled": [], "rebinds": [], "custom": []}
+        self.win.store.binds = {"disabled": [], "rebinds": [], "custom": [], "disabled_info": {}}
         self.win.store.schedule_save(after=lambda: (self.win.toast("Keybindings restored"), done and done()))
         self.rebuild()
 

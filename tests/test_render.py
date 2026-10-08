@@ -430,7 +430,7 @@ def kitchen_sink():
         "rules": [{"class": "org.gnome.Calculator", "float": True},
                   {"class": "steam_app_[0-9]+ (game)", "workspace": 5, "no_blur": True,
                    "opacity_active": 1.0, "opacity_inactive": 0.85}],
-        "binds": {"disabled": ["SUPER + W"],
+        "binds": {"disabled": ["SUPER + W"], "disabled_info": {"SUPER + W": "Close window"},
                   "rebinds": [{"old": "SUPER + RETURN", "new": "SUPER + T", "line": REBIND_LINE}],
                   "custom": [{"keys": "SUPER + ALT + N", "command": 'notify-send "héllo\\nwörld"',
                               "description": "Say \"hi\"\nnow", "launch": False},

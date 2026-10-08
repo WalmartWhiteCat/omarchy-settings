@@ -82,7 +82,7 @@ def test_set_and_current(s):
 def test_fresh_store_defaults(make_store):
     st = make_store()
     assert st.values == {} and st.rules == [] and st.autostart == []
-    assert st.binds == {"disabled": [], "rebinds": [], "custom": []}
+    assert st.binds == {"disabled": [], "rebinds": [], "custom": [], "disabled_info": {}}
 
 
 def test_round_trip(make_store):
@@ -99,7 +99,7 @@ def test_round_trip(make_store):
 
 def test_round_trip_fills_missing_bind_lists(make_store):
     st = make_store({"binds": {"disabled": ["SUPER + W"]}})
-    assert st.binds == {"disabled": ["SUPER + W"], "rebinds": [], "custom": []}
+    assert st.binds == {"disabled": ["SUPER + W"], "rebinds": [], "custom": [], "disabled_info": {}}
 
 
 def test_legacy_hyprland_json_is_migrated(make_store):
@@ -147,7 +147,7 @@ def test_wrong_types_are_ignored_not_fatal(make_store):
     st = make_store({"hyprland": [], "binds": {"disabled": "x", "custom": None}, "rules": {},
                      "monitors": {"DP-1": {"enabled": True}}})
     assert st.values == {} and st.rules == [] and st.monitors == {"DP-1": {"enabled": True}}
-    assert st.binds == {"disabled": [], "rebinds": [], "custom": []}
+    assert st.binds == {"disabled": [], "rebinds": [], "custom": [], "disabled_info": {}}
     assert "hyprland" in st.load_warning
     assert luac_error(st.render_lua()) is None
 

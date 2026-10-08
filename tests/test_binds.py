@@ -179,7 +179,7 @@ def test_comment_is_ignored(parsed):
 def test_entry_fields(parsed):
     e = parsed["SUPER + RETURN"]
     assert e == {"keys": "SUPER + RETURN", "description": "Terminal", "group": "applications", "rebindable": True,
-                 "line": 'o.bind("SUPER + RETURN", "Terminal", { omarchy = "terminal" })'}
+                 "line": 'o.bind("SUPER + RETURN", "Terminal", { omarchy = "terminal" })', "guard": None}
     assert parsed["SUPER + X"]["description"] == ""
     assert parsed["SUPER + V"]["group"] == "utilities"
 
@@ -264,7 +264,8 @@ def test_normalize_equivalent(a, b):
     ("SUPER + SHIFT + Return", (("SUPER", "SHIFT"), "return")),
     ("ALT + CTRL + SHIFT + SUPER + x", (("SUPER", "SHIFT", "CTRL", "ALT"), "x")),
     ("F9", ((), "f9")),
-    ("SUPER + code:10", (("SUPER",), "code:10")),
+    ("SUPER + code:10", (("SUPER",), "1")),  # keycodes compare as the key they produce
+    ("SUPER + code:200", (("SUPER",), "code:200")),  # unknown keycode stays as written
     ("XF86AudioRaiseVolume", ((), "xf86audioraisevolume")),
     ("SUPER", (("SUPER",), "")),
     ("", ((), "")),
@@ -292,7 +293,7 @@ def test_normalize_distinguishes_different_keys():
     ("SUPER + code:10", "Super + 1"),
     ("SUPER + code:18", "Super + 9"),
     ("SUPER + code:19", "Super + 0"),
-    ("SUPER + code:20", "Super + Code:20"),
+    ("SUPER + code:20", "Super + -"),
     ("SUPER + code:9", "Super + Code:9"),
     ("XF86AudioMute", "Xf86audiomute"),
     ("F9", "F9"),

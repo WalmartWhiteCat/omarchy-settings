@@ -23,6 +23,7 @@ REAL_POPEN = subprocess.Popen
 REAL_OMARCHY = core.OMARCHY_PATH
 
 ALLOWED = {"luac"}
+US_KEYCODES = {**{9 + i: str(i % 10) for i in range(1, 11)}, 20: "minus", 21: "equal", 24: "q", 36: "return"}
 MODULES = (core, store, binds, pages_look, pages_system, pages_keys)
 
 
@@ -112,7 +113,10 @@ def sandbox(tmp_path, monkeypatch, request):
 
     stubs = {"run": fake_run, "run_ok": fake_run_ok, "run_async": fake_run_async,
              "run_chain": fake_run_chain, "spawn_detached": fake_spawn,
-             "hypr_option": lambda name: None, "hypr_json": lambda *a: None, "gsetting": lambda *a, **k: ""}
+             "hypr_option": lambda name: None, "hypr_json": lambda *a: None, "gsetting": lambda *a, **k: "",
+             # a fixed US keymap, so tests don't depend on the machine's keyboard layout
+             "keycode_name": lambda code: US_KEYCODES.get(code),
+             "source_bind_spellings": lambda: {}}
     for mod in MODULES:
         for name, fn in stubs.items():
             if hasattr(mod, name):
