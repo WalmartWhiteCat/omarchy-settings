@@ -421,3 +421,46 @@ def test_touchpad_state_comes_from_omarchy_flag(sandbox):
     f.parent.mkdir(parents=True)
     f.write_text("some-touchpad\n")
     assert ps.touchpad_disabled() is True
+
+
+# ------------------------------------------------------------------ removing backgrounds
+
+
+def bg_page(sandbox, monkeypatch):
+    state = pl.STATE
+    (state / "current/theme/backgrounds").mkdir(parents=True)
+    (state / "current/theme.name").write_text("tokyo-night\n")
+    stock = state / "current/theme/backgrounds/1-stock.png"
+    stock.write_bytes(b"png")
+    mine = pl.HOME / ".config/omarchy/backgrounds/tokyo-night"
+    mine.mkdir(parents=True)
+    for n in ("a.png", "b.png"):
+        (mine / n).write_bytes(b"png")
+    page = pl.BackgroundPage.__new__(pl.BackgroundPage)
+    page.win = FakeWin()
+    page.populate = lambda: None
+    return page, mine, stock
+
+
+def test_remove_moves_a_user_background_to_the_trash(sandbox, monkeypatch):
+    page, mine, stock = bg_page(sandbox, monkeypatch)
+    pl.BackgroundPage.remove(page, mine / "a.png")
+    assert sandbox.trash == [str(mine / "a.png")]
+    assert not (mine / "a.png").exists() and stock.exists()
+    assert not any(c[:4] == ["omarchy", "theme", "bg", "set"] for c in sandbox.run_async)
+
+
+def test_removing_the_current_background_switches_to_another(sandbox, monkeypatch):
+    page, mine, stock = bg_page(sandbox, monkeypatch)
+    (pl.STATE / "current/background").symlink_to(mine / "a.png")
+    pl.BackgroundPage.remove(page, mine / "a.png")
+    assert ["omarchy", "theme", "bg", "set", str(mine / "b.png")] in sandbox.run_async
+    assert "switched to b.png" in page.win.toasts[-1]
+
+
+def test_trash_failure_keeps_the_file(sandbox, monkeypatch):
+    page, mine, stock = bg_page(sandbox, monkeypatch)
+    monkeypatch.setattr(pl, "trash_file", lambda p: "no Trash on this filesystem")
+    pl.BackgroundPage.remove(page, mine / "a.png")
+    assert (mine / "a.png").exists()
+    assert "Couldn't move" in page.win.toasts[-1]

@@ -50,7 +50,7 @@ class Calls:
     """Records the stubbed run / run_async / run_chain calls."""
 
     def __init__(self):
-        self.run, self.run_async, self.run_chain, self.spawn = [], [], [], []
+        self.run, self.run_async, self.run_chain, self.spawn, self.trash = [], [], [], [], []
         self.run_output = {}  # tuple(cmd) -> stdout for the stubbed run()
 
     def all_cmds(self):
@@ -116,7 +116,9 @@ def sandbox(tmp_path, monkeypatch, request):
              "hypr_option": lambda name: None, "hypr_json": lambda *a: None, "gsetting": lambda *a, **k: "",
              # a fixed US keymap, so tests don't depend on the machine's keyboard layout
              "keycode_name": lambda code: US_KEYCODES.get(code),
-             "source_bind_spellings": lambda: {}}
+             "source_bind_spellings": lambda: {},
+             # never the real Trash: record and remove instead
+             "trash_file": lambda path: (calls.trash.append(str(path)), os.remove(path)) and None}
     for mod in MODULES:
         for name, fn in stubs.items():
             if hasattr(mod, name):

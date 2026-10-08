@@ -128,6 +128,16 @@ def backup(path):
         shutil.copy2(path, path.with_name(f"{path.name}.bak.{int(time.time())}"))
 
 
+def trash_file(path):
+    """Move a file to the user's Trash. Returns None, or the error message."""
+    from gi.repository import Gio
+    try:
+        Gio.File.new_for_path(str(path)).trash(None)
+        return None
+    except Exception as e:  # GLib.Error, e.g. no Trash on that filesystem
+        return getattr(e, "message", None) or str(e)
+
+
 def write_atomic(path, text):
     path = Path(path)
     tmp = path.with_name(path.name + ".tmp")

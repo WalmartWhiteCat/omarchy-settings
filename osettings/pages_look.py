@@ -8,10 +8,10 @@ from pathlib import Path
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from .core import (DEFAULT_THEME, HOME, OMARCHY_PATH, STATE, USER_THEMES, Page, clear_group, combo_row,
-                   confirm, current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in,
-                   load_texture_async, reset_group, rgba_from_hypr, rgba_to_hex, rgba_to_hypr, run, run_async,
-                   run_chain, scale_row, slugify, switch_row, theme_dir, theme_preview)
+from .core import (DEFAULT_THEME, HOME, OMARCHY_PATH, STATE, USER_THEMES, Page, clear_group, combo_row, confirm,
+                   current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in, load_texture_async,
+                   reset_group, rgba_from_hypr, rgba_to_hex, rgba_to_hypr, run, run_async, run_chain, scale_row,
+                   slugify, switch_row, theme_dir, theme_preview, trash_file)
 from .store import DEFAULT_ANIMATIONS
 
 PIN_HOOK = HOME / ".config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins"
@@ -369,17 +369,52 @@ class BackgroundPage(Page):
         while (c := self.flow.get_first_child()):
             self.flow.remove(c)
         self.group.set_description(f"Wallpapers for the current theme ({current_theme_slug()}). "
-                                   "Use + to add your own.")
+                                   "Use + to add your own; ones you added have a button to move them to the "
+                                   "Trash.")
         link = STATE / "current/background"
         current = os.path.realpath(link) if link.exists() else ""
-        for img in images_in(self.user_dir(), STATE / "current/theme/backgrounds"):
+        mine = self.user_dir()
+        for img in images_in(mine, STATE / "current/theme/backgrounds"):
             pic = thumb()
-            child = Gtk.FlowBoxChild(child=pic, tooltip_text=img.name)
+            overlay = Gtk.Overlay(child=pic)
+            # Only backgrounds the user added can go: the theme's own come back with the theme.
+            if img.parent == mine:
+                btn = Gtk.Button(icon_name="user-trash-symbolic", tooltip_text="Move to Trash",
+                                 halign=Gtk.Align.END, valign=Gtk.Align.START, margin_top=6, margin_end=6)
+                btn.add_css_class("osd")
+                btn.add_css_class("circular")
+                btn.connect("clicked", lambda _b, i=img: self.confirm_remove(i))
+                overlay.add_overlay(btn)
+            child = Gtk.FlowBoxChild(child=overlay, tooltip_text=img.name)
             child.path = img
             self.flow.append(child)
             if os.path.realpath(img) == current:
                 self.flow.select_child(child)
             load_texture_async(img, 400, 225, lambda t, p=pic: t and p.set_paintable(t))
+
+    def confirm_remove(self, img):
+        confirm(self.win, "Move this background to the Trash?",
+                f"{img.name} is removed from this theme's backgrounds. You can get it back from the Trash.",
+                lambda: self.remove(img), label="Move to Trash")
+
+    def remove(self, img):
+        link = STATE / "current/background"
+        was_current = link.exists() and os.path.realpath(link) == os.path.realpath(img)
+        err = trash_file(img)
+        if err:
+            self.win.toast(f"Couldn't move {img.name} to the Trash: {err}")
+            return
+        if was_current:
+            # Don't leave the desktop pointing at a file that's gone.
+            remaining = images_in(self.user_dir(), STATE / "current/theme/backgrounds")
+            if remaining:
+                run_async(["omarchy", "theme", "bg", "set", str(remaining[0])], lambda *_: self.populate())
+                self.win.toast(f"Moved to the Trash; switched to {remaining[0].name}")
+            else:
+                self.win.toast("Moved to the Trash. This theme has no other backgrounds.")
+        else:
+            self.win.toast(f"Moved {img.name} to the Trash")
+        self.populate()
 
     def on_activate(self, _flow, child):
         run_async(["omarchy", "theme", "bg", "set", str(child.path)],
