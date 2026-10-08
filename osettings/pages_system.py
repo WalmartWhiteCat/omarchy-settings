@@ -152,9 +152,9 @@ class DisplaysPage(Page):
         g = Adw.PreferencesGroup(title=f"{name}", description=m.get("description", ""))
 
         def change(key, value):
-            d = self.draft.get(name) or dict(e)
-            d[key] = value
-            self.draft[name] = d
+            # The entry is the draft from the first change on, so later fix-ups (like the
+            # scale being corrected for a new resolution) land in what Apply saves.
+            self.draft[name] = e
             e[key] = value
             self.apply_btn.set_sensitive(True)
             if key == "mode":
