@@ -147,19 +147,22 @@ class Store:
 
     def _save(self):
         self._pending = None
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(self.to_json(), indent=2))
+        callbacks, self._after_save = self._after_save, []
         lua = self.render_lua()
         err = lua_syntax_error(lua)
         if err:
+            # Nothing is written, so the last good settings.json and Lua file stay in place.
             self.on_result(f"Not saved, generated config is invalid: {err}")
+            for cb in callbacks:
+                cb()
             return False
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        SETTINGS_FILE.write_text(json.dumps(self.to_json(), indent=2))
         HYPR_LUA.write_text(lua)
         if ensure_required() == "disabled" and not self._warned_disabled:
             self._warned_disabled = True
             self.on_result("Changes aren't being loaded: the omarchy_settings line in "
                            "~/.config/hypr/hyprland.lua is commented out")
-        callbacks, self._after_save = self._after_save, []
 
         def checked(_c, out, _e):
             out = out.strip()
