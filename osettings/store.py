@@ -9,7 +9,7 @@ import time
 from gi.repository import GLib
 
 from .core import (CONFIG_DIR, HYPR_DIR, OMARCHY_PATH, hypr_option, lua_str, lua_syntax_error, lua_table,
-                   lua_value, run_async)
+                   lua_value, run_async, write_atomic)
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 LEGACY_FILE = CONFIG_DIR / "hyprland.json"
@@ -76,6 +76,7 @@ class Store:
     def __init__(self, on_result):
         self.on_result = on_result
         self.load_warning = None  # shown by the window once it can show toasts
+        self.set_aside = False    # settings.json was unreadable and moved away
         data = self._load()
 
         def get(key, kind):
@@ -120,6 +121,7 @@ class Store:
             except Exception:
                 pass
             self.load_warning = f"settings.json couldn't be read, so the app started fresh. The old file is {broken}"
+            self.set_aside = True
             return {}
         try:
             data = json.loads(LEGACY_FILE.read_text())
@@ -223,10 +225,18 @@ class Store:
             for cb in callbacks:
                 cb()
             return False
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(self.to_json(), indent=2))
-        HYPR_LUA.write_text(lua)
-        if ensure_required() == "disabled" and not self._warned_disabled:
+        try:
+            # Atomic: a crash mid-write leaves the previous file, never a truncated one.
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            write_atomic(SETTINGS_FILE, json.dumps(self.to_json(), indent=2))
+            write_atomic(HYPR_LUA, lua)
+            state = ensure_required()
+        except Exception as e:  # read-only file, full disk, missing folder…
+            self.on_result(f"Couldn't save settings: {e}")
+            for cb in callbacks:
+                cb()
+            return False
+        if state == "disabled" and not self._warned_disabled:
             self._warned_disabled = True
             self.on_result("Changes aren't being loaded: the omarchy_settings line in "
                            "~/.config/hypr/hyprland.lua is commented out")

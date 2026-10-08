@@ -35,7 +35,10 @@ class SettingsWindow(Adw.ApplicationWindow):
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider,
                                                   Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self.store = Store(self.on_store_result)
-        self.store.sync_file()
+        if not self.store.set_aside:
+            # After a damaged settings.json, keep the last good Lua file until the user changes
+            # something, rather than replacing it with an empty one at startup.
+            self.store.sync_file()
         self.toasts = Adw.ToastOverlay()
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
         self.classes = {}
