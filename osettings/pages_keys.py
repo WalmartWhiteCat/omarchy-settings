@@ -76,9 +76,20 @@ class ShortcutDialog(Adw.Dialog):
         keys_ctl = Gtk.EventControllerKey(propagation_phase=Gtk.PropagationPhase.CAPTURE)
         keys_ctl.connect("key-pressed", self.on_key)
         self.add_controller(keys_ctl)
-        self.connect("closed", lambda *_: leave_capture())
-        self._timeout = GLib.timeout_add_seconds(60, lambda: leave_capture() or False)
+        self.connect("closed", lambda *_: (self._cancel_timeout(), leave_capture()))
+        self._timeout = GLib.timeout_add_seconds(60, self._timed_out)
         enter_capture()
+
+    def _timed_out(self):
+        self._timeout = None
+        leave_capture()
+        return False
+
+    def _cancel_timeout(self):
+        # A stale timer must not end the recording of a dialog opened after this one.
+        if self._timeout:
+            GLib.source_remove(self._timeout)
+            self._timeout = None
 
     def on_app(self, row, _p):
         i = row.get_selected()
@@ -128,7 +139,7 @@ class ShortcutDialog(Adw.Dialog):
                 return
             result.update(command=cmd, description=self.desc.get_text().strip() or cmd,
                           launch=self.launch.get_active(), enabled=True)
-        GLib.source_remove(self._timeout)
+        self._cancel_timeout()
         self.close()
         self.on_done(result)
 
