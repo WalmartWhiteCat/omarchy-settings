@@ -8,8 +8,8 @@ import time
 
 from gi.repository import GLib
 
-from .core import (CONFIG_DIR, HYPR_DIR, OMARCHY_PATH, hypr_option, lua_str, lua_syntax_error, lua_table,
-                   lua_value, run_async, write_atomic)
+from .core import (CONFIG_DIR, HYPR_DIR, OMARCHY_PATH, STATE, hypr_option, lua_str, lua_syntax_error,
+                   lua_table, lua_value, run_async, write_atomic)
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 LEGACY_FILE = CONFIG_DIR / "hyprland.json"
@@ -131,6 +131,8 @@ class Store:
         self._pending = None
         self._after_save = []
         self._warned_disabled = False
+        # Rounding and gaps last sent to the shell; starts as loaded, so a plain save doesn't refresh it.
+        self._shell_style = tuple(self.values.get(k) for k in SHELL_STYLE_KEYS)
 
     def _clean(self):
         """Drop entries the Lua generator can't handle, so a bad settings.json can't stop the
@@ -317,9 +319,15 @@ class Store:
             self.on_result("Changes aren't being loaded: the omarchy_settings line in "
                            "~/.config/hypr/hyprland.lua is commented out")
 
+        style = tuple(self.values.get(k) for k in SHELL_STYLE_KEYS)
+        style_changed = style != self._shell_style
+        self._shell_style = style
+
         def checked(_c, out, _e):
             out = out.strip()
             self.on_result(None if not out or out == "no errors" else out)
+            if style_changed:
+                refresh_shell_style()  # after the reload, so the shell reads the new values
             for cb in callbacks:
                 cb()
 
@@ -490,6 +498,30 @@ def require_state():
     if ACTIVE_REQUIRE.search(text):
         return "loaded" if HYPR_LUA.exists() else "missing"
     return "disabled" if COMMENTED_REQUIRE.search(text) else "missing"
+
+
+# Hyprland options Omarchy's shell copies for its own panels, menus and notifications
+# (cornerRadius from decoration:rounding, edge gap from general:gaps_out).
+SHELL_STYLE_KEYS = ("decoration:rounding", "general:gaps_out")
+
+
+def refresh_shell_style():
+    """Make Omarchy's shell re-read rounding and gaps from Hyprland.
+
+    The shell only reads them at startup and when a theme is applied, so popups kept their old
+    corners after a change. This sends the current theme exactly as `omarchy theme set` does,
+    which changes nothing else and makes the shell refresh its style."""
+    import base64
+    theme = STATE / "current/theme"
+    payload = []
+    for name in ("colors.toml", "shell.toml"):
+        try:
+            payload.append(base64.b64encode((theme / name).read_bytes()).decode())
+        except Exception:
+            payload.append("")
+    if not payload[0]:
+        return  # no current theme to re-send
+    run_async(["omarchy-shell", "shell", "applyTheme", *payload])
 
 
 def ensure_required():

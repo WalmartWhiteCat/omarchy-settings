@@ -499,7 +499,8 @@ class WindowsPage(Page):
                                  description="Border colors normally come from the theme.")
         g.add(scale_row("Border width", None, 0, 10, 1, cur("general:border_size", 2), 0,
                         setter("general:border_size")))
-        g.add(scale_row("Corner rounding", None, 0, 30, 1, cur("decoration:rounding", 0), 0,
+        g.add(scale_row("Corner rounding", "Omarchy's menus, notifications and panels use the same rounding",
+                        0, 30, 1, cur("decoration:rounding", 0), 0,
                         setter("decoration:rounding")))
         self.border_rows(g)
         self.add(g)

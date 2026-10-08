@@ -356,3 +356,40 @@ def test_named_workspace_rule_is_kept():
     line = store_mod.Store.rule_lua({"class": "steam", "workspace": "special:steam"})
     assert 'workspace = "special:steam"' in line
     assert 'workspace = "3"' in store_mod.Store.rule_lua({"class": "x", "workspace": 3.0})
+
+
+def test_rounding_change_refreshes_the_shell_style(make_store, monkeypatch):
+    import base64
+    theme = store_mod.STATE / "current/theme"
+    theme.mkdir(parents=True)
+    (theme / "colors.toml").write_text('accent = "#7aa2f7"\n')
+    (theme / "shell.toml").write_text("[font]\nbase-size = 12\n")
+    cmds = []
+
+    def run_async(cmd, done=None):  # finish at once, like hyprctl would
+        cmds.append(cmd)
+        if done:
+            done(0, "", "")
+
+    monkeypatch.setattr(store_mod, "run_async", run_async)
+    st = make_store({"hyprland": {"decoration:rounding": 0}})
+    st.save_now()
+    assert not [c for c in cmds if c[:3] == ["omarchy-shell", "shell", "applyTheme"]]  # nothing changed
+
+    st.values["decoration:rounding"] = 12
+    st.save_now()
+    applied = [c for c in cmds if c[:3] == ["omarchy-shell", "shell", "applyTheme"]]
+    assert applied == [["omarchy-shell", "shell", "applyTheme",
+                        base64.b64encode(b'accent = "#7aa2f7"\n').decode(),
+                        base64.b64encode(b"[font]\nbase-size = 12\n").decode()]]
+    # after the reload, so the shell reads the new value
+    assert cmds.index(["hyprctl", "reload"]) < cmds.index(applied[0])
+
+    st.values["general:gaps_in"] = 3  # not something the shell copies
+    st.save_now()
+    assert len([c for c in cmds if c[:3] == ["omarchy-shell", "shell", "applyTheme"]]) == 1
+
+
+def test_no_shell_refresh_without_a_current_theme(sandbox):
+    store_mod.refresh_shell_style()
+    assert not sandbox.run_async
