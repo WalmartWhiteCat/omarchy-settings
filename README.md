@@ -9,6 +9,7 @@ your desktop's look and feel from one window instead of hand-editing config file
 | Display | Displays, Night Light, Fonts and Text, Cursor |
 | Input | Keyboard and Mouse, Keybindings |
 | System | Bar, Power and Notifications, Default Apps, Autostart |
+| Widgets | Desktop Notes (look and position of the `sourced.desktop-notes` shell widget) |
 
 Every page has a **Restore defaults** button, and the menu (☰) has **Restore all defaults…**.
 
@@ -44,6 +45,7 @@ like Omarchy's own menus. Everything else goes into files it owns, or small, bac
 | `~/.config/omarchy/themes/<theme>/colors.toml` | Edited theme colors. Stock themes get a separate copy (marked with `.omarchy-settings-overlay`); your own themes are edited in place (original kept as `colors.toml.omarchy-settings-original`) | Theme Colors → Restore defaults |
 | `~/.config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins` | Re-applies app style, icons and interface font you chose to keep after each theme change | Set them back to "Follow theme" |
 | `~/.config/omarchy/backgrounds/<theme>/` | Backgrounds you add; removing one moves it to the Trash | — |
+| `~/.config/desktop-notes/config.json` | Desktop Notes widget's background opacity, width, text size and position; the widget applies changes live. Notes themselves stay in `~/.local/state/desktop-notes/notes.json` | Widgets → Desktop Notes → Restore defaults |
 | GNOME settings (`gsettings`) | Cursor theme and size, light/dark style, icon theme, interface font | Restore defaults on the page |
 
 The generated Lua runs each part separately, so one bad entry can't break the rest of your Hyprland

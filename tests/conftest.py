@@ -15,7 +15,7 @@ from gi.repository import GLib
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from osettings import binds, core, pages_keys, pages_look, pages_system, store  # noqa: E402
+from osettings import binds, core, pages_keys, pages_look, pages_system, pages_widgets, store  # noqa: E402
 
 # Kept for the opt-in integration test, which needs to start a nested Hyprland.
 REAL_RUN = subprocess.run
@@ -24,7 +24,7 @@ REAL_OMARCHY = core.OMARCHY_PATH
 
 ALLOWED = {"luac"}
 US_KEYCODES = {**{9 + i: str(i % 10) for i in range(1, 11)}, 20: "minus", 21: "equal", 24: "q", 36: "return"}
-MODULES = (core, store, binds, pages_look, pages_system, pages_keys)
+MODULES = (core, store, binds, pages_look, pages_system, pages_keys, pages_widgets)
 
 
 def _argv0(args):
@@ -85,6 +85,8 @@ def sandbox(tmp_path, monkeypatch, request):
         "MONITORS_LUA": home / ".config/hypr/monitors.lua",
         "HYPRSUNSET_CONF": home / ".config/hypr/hyprsunset.conf",
         "PIN_HOOK": home / ".config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins",
+        "NOTES_CONFIG": home / ".config/desktop-notes/config.json",
+        "NOTES_PLUGIN": home / ".config/omarchy/plugins/sourced.desktop-notes",
     }
     for mod in MODULES:
         for name, value in paths.items():
@@ -134,7 +136,8 @@ def sandbox(tmp_path, monkeypatch, request):
 
 
 REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
-WATCHED = [REAL_HOME / ".config/hypr", REAL_HOME / ".config/omarchy-settings", REAL_HOME / ".config/omarchy"]
+WATCHED = [REAL_HOME / ".config/hypr", REAL_HOME / ".config/omarchy-settings", REAL_HOME / ".config/omarchy",
+           REAL_HOME / ".config/desktop-notes"]
 
 
 def _snapshot():

@@ -14,7 +14,10 @@ Lua config). README.md covers what it does and every file it writes; OPEN_ITEMS.
   `require_state`, `refresh_rebinds`, `omarchy_opacity_tags`.
 - `binds.py`: parses Omarchy's binding files, reads exact key spellings by running hyprland.lua with
   a stubbed `hl` (as Omarchy's keybinding menu does), key normalisation (`code:N` = produced key).
-- `pages_look.py`, `pages_system.py`, `pages_keys.py`: pages. `window.py`: sidebar, lazy pages,
+- `pages_look.py`, `pages_system.py`, `pages_keys.py`, `pages_widgets.py`: pages. `pages_widgets.py`
+  writes the Desktop Notes widget's `~/.config/desktop-notes/config.json`; the widget itself is a shell
+  plugin in `~/.config/omarchy/plugins/sourced.desktop-notes` (not in this repo) that watches that file
+  and clamps to the same ranges (`NOTES_LIMITS`), so change both together. `window.py`: sidebar, lazy pages,
   Restore all (`RESET_ORDER`), startup checks.
 
 ## Design decisions: don't "fix" these

@@ -14,6 +14,9 @@ Covered by tests with stand-ins, but never clicked through live:
   its layout; if Omarchy re-adds enabled widgets, it would come back, harmlessly).
 - **Keyboard:** a non-Latin layout keeping shortcuts working.
 - **Restore all defaults** end to end.
+- **Desktop Notes:** the page's sliders and position moving the widget live, and the widget's settings
+  button opening this page (both when the app is closed and when it's already open). The widget's new
+  QML loaded without errors and sits where it did before.
 
 The opt-in nested-Hyprland test (`OSETTINGS_NESTED_HYPRLAND=1 python3 -m pytest
 tests/test_nested_hyprland.py`) could settle some of these safely, for example whether a later

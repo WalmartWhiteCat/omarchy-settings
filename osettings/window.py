@@ -8,6 +8,7 @@ from .pages_keys import AutostartPage, KeysPage, leave_capture
 from .pages_look import BackgroundPage, ColorsPage, RulesPage, ThemePage, WindowsPage, undo_all_color_edits
 from .pages_system import (AppsPage, BarPage, CursorPage, DisplaysPage, InputPage, NightLightPage, PowerPage,
                            TextPage)
+from .pages_widgets import NotesPage
 from .store import Store
 
 SECTIONS = [
@@ -15,10 +16,11 @@ SECTIONS = [
     ("Display", [DisplaysPage, NightLightPage, TextPage, CursorPage]),
     ("Input", [InputPage, KeysPage]),
     ("System", [BarPage, PowerPage, AppsPage, AutostartPage]),
+    ("Widgets", [NotesPage]),
 ]
 # Theme near the end (slowest, and it picks a wallpaper), then that theme's first stock wallpaper.
 RESET_ORDER = ["windows", "rules", "displays", "input", "keys", "autostart", "nightlight", "text", "cursor",
-               "power", "bar", "colors", "theme", "background"]
+               "power", "bar", "notes", "colors", "theme", "background"]
 
 CSS = """
 .keycap { font-family: monospace; font-size: 0.9em; padding: 2px 8px; border-radius: 6px;
@@ -156,8 +158,9 @@ class SettingsWindow(Adw.ApplicationWindow):
         confirm(self, "Restore all defaults?",
                 f"Everything this app controls goes back to Omarchy's defaults: the {DEFAULT_THEME} theme and its "
                 "wallpaper, theme colors, window look, app rules, displays, night light, keyboard and mouse, "
-                "keybindings, startup items, fonts, cursor, bar, idle and notifications. Installed themes, added "
-                "wallpapers, bar widgets and default apps are kept.",
+                "keybindings, startup items, fonts, cursor, bar, idle and notifications, and the Desktop Notes "
+                "widget's look and place. Installed themes, added wallpapers, bar widgets, default apps and your "
+                "notes are kept.",
                 self.reset_all, label="Restore all")
 
     def reset_all(self):
@@ -202,3 +205,4 @@ class SettingsApp(Adw.Application):
     def do_activate(self):
         win = self.props.active_window or SettingsWindow(self)
         win.present()
+
