@@ -269,10 +269,31 @@ class KeysPage(Page):
         self.rebuild()
 
     def take_over(self, keys, ignore=None):
-        """If a custom shortcut already uses `keys`, turn it off (defaults are unbound in Lua)."""
+        """Turn off whatever shortcut uses `keys` now, so the page shows what Hyprland will do.
+
+        The Lua side unbinds the key either way; without this a displaced Omarchy shortcut
+        would still look active, and later clash checks would point at the wrong one."""
         clash = self.who_uses(keys, ignore)
-        if clash and clash["kind"] == "custom":
+        if not clash:
+            return None
+        if clash["kind"] == "custom":
             clash["ref"]["enabled"] = False
+        else:
+            b = clash["ref"]
+            binds = self.win.store.binds
+            binds["rebinds"] = [r for r in binds["rebinds"] if r["old"] != b["keys"]]
+            if b["keys"] not in binds["disabled"]:
+                binds["disabled"].append(b["keys"])
+        self.win.toast(f"“{clash['description'] or clash['keys']}” was turned off: its key is used now")
+        return clash
+
+    def key_taken(self, b):
+        """Refuse to bring `b` back on its original key while another shortcut uses it."""
+        clash = self.who_uses(b["keys"], ignore=b)
+        if clash:
+            self.win.toast(f"{pretty(b['keys'])} is used by “{clash['description'] or clash['keys']}”. "
+                           "Change or turn that off first.")
+        return clash
 
     def change_default(self, b):
         def done(res):
@@ -287,11 +308,15 @@ class KeysPage(Page):
         ShortcutDialog(self, f"Change “{b['description']}”", done, ignore=b).present(self.win)
 
     def restore_default(self, b):
+        if self.key_taken(b):
+            return
         binds = self.win.store.binds
         binds["rebinds"] = [r for r in binds["rebinds"] if r["old"] != b["keys"]]
         self.saved(f"“{b['description']}” is back on {pretty(b['keys'])}")
 
     def set_disabled(self, b, off):
+        if not off and self.key_taken(b):
+            return
         binds = self.win.store.binds
         binds["disabled"] = [k for k in binds["disabled"] if k != b["keys"]]
         if off:
