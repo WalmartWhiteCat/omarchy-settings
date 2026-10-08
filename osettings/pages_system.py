@@ -141,9 +141,14 @@ class DisplaysPage(Page):
     def entry(self, m):
         e = self.draft.get(m["name"])
         if e is None:
-            e = {"enabled": not m.get("disabled", False),
-                 "mode": f"{m['width']}x{m['height']}@{m['refreshRate']:.2f}",
-                 "x": m["x"], "y": m["y"], "scale": round(m["scale"], 6), "transform": m.get("transform", 0)}
+            # A screen that is off can report a 0x0 mode; use its best real mode instead.
+            if m.get("width", 0) > 0 and m.get("height", 0) > 0:
+                mode = f"{m['width']}x{m['height']}@{m['refreshRate']:.2f}"
+            else:
+                mode = (monitor_modes(m) or ["preferred"])[0]
+            e = {"enabled": not m.get("disabled", False), "mode": mode,
+                 "x": m.get("x", 0), "y": m.get("y", 0), "scale": round(m.get("scale") or 1, 6),
+                 "transform": m.get("transform", 0)}
         return e
 
     def monitor_group(self, m):
@@ -187,8 +192,8 @@ class DisplaysPage(Page):
     def refresh_scales(self, name, initial=False):
         r = self.rows[name]
         e = r["entry"]
-        w, h = (int(v) for v in e["mode"].split("@")[0].split("x"))
-        scales = valid_scales(w, h)
+        w, h = mode_size(e["mode"])
+        scales = valid_scales(w, h) if w and h else [1, 1.25, 1.5, 2]
         if e["scale"] not in scales:
             scales = sorted(set(scales + ([e["scale"]] if initial else [])))
         row = r["scale"]
@@ -209,9 +214,9 @@ class DisplaysPage(Page):
                 continue
             r["x"].set_value(x)
             r["y"].set_value(0)
-            w = int(e["mode"].split("x")[0])
+            w, h = mode_size(e["mode"])
             if e.get("transform", 0) % 2:
-                w = int(e["mode"].split("@")[0].split("x")[1])
+                w = h
             x += round(w / e["scale"])
 
     def apply(self):
