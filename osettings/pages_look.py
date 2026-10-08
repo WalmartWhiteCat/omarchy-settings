@@ -140,11 +140,16 @@ class ThemePage(Page):
                 load_texture_async(preview, 400, 225, lambda t, p=pic: t and p.set_paintable(t))
 
     def on_activate(self, _flow, child):
+        if getattr(self, "applying", False):
+            self.win.toast("Still applying the last theme…")
+            return
+        self.applying = True
         name = child.theme_name
         self.win.busy(f"Applying {name}…")
         run_async(["omarchy", "theme", "set", name], lambda c, o, e: self.applied(name, c, e))
 
     def applied(self, name, code, err):
+        self.applying = False
         self.win.toast(f"Theme set to {name}" if code == 0 else f"Theme failed: {err.strip()[:120]}")
         self.populate()
         self.win.theme_changed()
