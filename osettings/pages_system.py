@@ -12,7 +12,7 @@ from .core import (CONFIG_DIR, DEFAULT_FONT, HOME, HYPR_DIR, OMARCHY_PATH, SHELL
                    combo_row, confirm, group_add, gsetting, hypr_json, icon_button, read_json, reset_group, run,
                    run_async, run_chain, run_ok, scale_row, spawn_detached, spin_row, switch_row, write_atomic)
 from .pages_look import apply_pins
-from .store import Store
+from .store import INTERNAL_PANEL, Store
 
 MONITORS_LUA = HYPR_DIR / "monitors.lua"
 HYPRSUNSET_CONF = HYPR_DIR / "hyprsunset.conf"
@@ -48,7 +48,6 @@ def valid_scales(w, h):
     return out or [1]
 
 
-INTERNAL_PANEL = re.compile(r"^(eDP|LVDS|DSI)-")
 TRIAL_MARKER_NAME = "display-trial"
 TRIAL_SECONDS = 15
 # Undoes a display trial even if the app dies first: unless the app removes the marker
@@ -146,7 +145,9 @@ class DisplaysPage(Page):
                 mode = f"{m['width']}x{m['height']}@{m['refreshRate']:.2f}"
             else:
                 mode = (monitor_modes(m) or ["preferred"])[0]
-            e = {"enabled": not m.get("disabled", False), "mode": mode,
+            # Built-in panels are always saved on; Omarchy's lid handling switches them off.
+            on = True if INTERNAL_PANEL.match(m["name"]) else not m.get("disabled", False)
+            e = {"enabled": on, "mode": mode,
                  "x": m.get("x", 0), "y": m.get("y", 0), "scale": round(m.get("scale") or 1, 6),
                  "transform": m.get("transform", 0)}
         return e

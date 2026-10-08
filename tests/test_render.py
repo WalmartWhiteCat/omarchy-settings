@@ -220,7 +220,7 @@ def test_cursor(make_store, cursor):
 
 
 @pytest.mark.parametrize("name, m, expected", [
-    ("eDP-1", {"enabled": False}, 'hl.monitor({ output = "eDP-1", disabled = true })'),
+    ("HDMI-A-1", {"enabled": False}, 'hl.monitor({ output = "HDMI-A-1", disabled = true })'),
     ("eDP-1", {}, 'hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = 1 })'),
     ("DP-1", {"mode": "2560x1440@144", "x": 0, "y": 0, "scale": 1.25},
      'hl.monitor({ output = "DP-1", mode = "2560x1440@144", position = "0x0", scale = 1.25 })'),

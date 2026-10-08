@@ -290,3 +290,24 @@ def test_unique_path(tmp_path):
     assert pl.unique_path(a) == tmp_path / "wall-2.png"
     (tmp_path / "wall-2.png").write_text("2")
     assert pl.unique_path(a) == tmp_path / "wall-3.png"
+
+
+# ------------------------------------------------------------------ built-in laptop panels
+
+
+def test_docked_laptop_panel_is_never_saved_off(make_store, sandbox, monkeypatch):
+    panel = dict(MON, name="eDP-1", disabled=True, width=0, height=0, refreshRate=0.0)
+    st = make_store()
+    page, dialogs = make_display_page(st, monkeypatch, live=(panel, dict(MON, name="DP-2")))
+    e = page.rows["eDP-1"]["entry"]
+    assert e["enabled"] is True
+    page.draft["eDP-1"] = dict(e, scale=1.25)
+    ps.DisplaysPage.apply(page)
+    dialogs[-1].on_yes()
+    lua = store_mod.HYPR_LUA.read_text()
+    assert "disabled = true" not in lua and 'output = "eDP-1"' in lua
+
+
+def test_generator_never_writes_a_panel_off():
+    assert "disabled" not in store_mod.Store.monitor_lua("eDP-1", {"enabled": False, "mode": "1920x1080@60.00"})
+    assert "disabled = true" in store_mod.Store.monitor_lua("DP-1", {"enabled": False})
