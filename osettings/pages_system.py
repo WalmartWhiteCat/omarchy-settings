@@ -847,8 +847,9 @@ class BarPage(Page):
         self.add(reset_group(self.win, "Restore default bar settings?",
                              "Position, transparency, visibility and clock format go back to Omarchy's defaults. "
                              "Your widget layout is kept.", self.reset))
-        self.add(reset_group(self.win, "Restore default bar widgets?",
-                             "Widgets you added, removed or moved go back to Omarchy's default layout.",
+        self.add(reset_group(self.win, "Restore the default bar?",
+                             "Replaces the whole bar setup with Omarchy's default: widgets you added, removed or "
+                             "moved, and also position, transparency and clock format.",
                              lambda: run_chain([["omarchy", "bar", "defaults"]], self.after_widgets),
                              label="Restore default bar widgets"))
 
