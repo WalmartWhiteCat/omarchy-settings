@@ -190,6 +190,22 @@ COLOR_GROUPS = [
                                  "bright_magenta", "bright_cyan", "bright_white"]),
 ]
 OVERLAY_MARK = ".omarchy-settings-overlay"
+TABLE_HEADER = re.compile(r"^[ \t]*\[", re.M)
+
+
+def rewrite_colors(text, changes):
+    """Set top-level `key = "value"` pairs in colors.toml text, keeping comments and order.
+
+    Only the part before the first [table] header is touched; keys that aren't there yet
+    are added at the end of that part, so they never land inside a table."""
+    header = TABLE_HEADER.search(text)
+    top, rest = (text[:header.start()], text[header.start():]) if header else (text, "")
+    for k, v in changes.items():
+        top, n = re.subn(rf'(?m)^([ \t]*{re.escape(k)}[ \t]*=[ \t]*)(?:"[^"\n]*"|\'[^\'\n]*\')',
+                         lambda m: f'{m.group(1)}"{v}"', top, count=1)
+        if not n:
+            top = top.rstrip("\n") + f'\n{k} = "{v}"\n' + ("\n" if rest else "")
+    return top + rest
 ORIGINAL_SUFFIX = ".omarchy-settings-original"
 
 
@@ -252,6 +268,16 @@ class ColorsPage(Page):
         return USER_THEMES / self.slug / "colors.toml"
 
     def save(self):
+        changes = {k: v for k, v in self.edited.items() if self.colors.get(k) != v}
+        text = rewrite_colors(self.source.read_text(), changes)
+        try:
+            parsed = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as e:
+            parsed, err = None, str(e)
+        if parsed is None or any(parsed.get(k) != v for k, v in changes.items()):
+            self.win.toast("Colors not saved: the theme's colors.toml couldn't be updated safely"
+                           + (f" ({err})" if parsed is None else ""))
+            return
         target = self.target()
         stock = not (USER_THEMES / self.slug).is_dir()
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -260,13 +286,6 @@ class ColorsPage(Page):
         original = target.with_name("colors.toml" + ORIGINAL_SUFFIX)
         if target.exists() and not original.exists() and not (target.parent / OVERLAY_MARK).exists():
             shutil.copy2(target, original)
-        # Rewrite values in place so comments and order survive.
-        text = self.source.read_text()
-        for k, v in self.edited.items():
-            if self.colors.get(k) != v:
-                text, n = re.subn(rf'(?m)^(\s*{re.escape(k)}\s*=\s*)"[^"]*"', rf'\g<1>"{v}"', text)
-                if not n:
-                    text += f'\n{k} = "{v}"\n'
         target.write_text(text)
         self.apply_theme("Colors applied")
 
