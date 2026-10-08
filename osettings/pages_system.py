@@ -365,6 +365,38 @@ def xkb_layouts():
     return out
 
 
+def non_latin_layouts():
+    """Omarchy's list of layouts that can't type Latin letters (read from its input.lua)."""
+    try:
+        text = (OMARCHY_PATH / "default/hypr/input.lua").read_text()
+        m = re.search(r'non_latin_layouts\s*=\s*"([^"]*)"', text)
+        if m:
+            return set(m.group(1).split())
+    except Exception:
+        pass
+    return set("af am ara bd bg by et ge gr il in iq ir kg kh kz la lk mk mm mn mv np rs ru sy th tj ua".split())
+
+
+def latin_first(layouts, variants):
+    """Hyprland matches shortcuts against the first layout, so a non-Latin first layout
+    (e.g. ru) would break Super + letter shortcuts. Like Omarchy's input.lua, put a Latin
+    layout first: move an existing one up, or add us. Returns (layouts, variants, changed)."""
+    lay = layouts.split(",")
+    var = variants.split(",") if variants else []
+    var += [""] * (len(lay) - len(var))
+    non_latin = non_latin_layouts()
+    if not lay or lay[0] not in non_latin:
+        return layouts, variants, False
+    i = next((i for i, l in enumerate(lay) if l and l not in non_latin), None)
+    if i is None:
+        lay.insert(0, "us")
+        var.insert(0, "")
+    else:
+        lay.insert(0, lay.pop(i))
+        var.insert(0, var.pop(i))
+    return ",".join(lay), (",".join(var) if any(var) else ""), True
+
+
 CAPS_OPTIONS = [
     ("Compose key (Omarchy default)", "compose:caps,shift:both_capslock_cancel"),
     ("Caps Lock", ""),
@@ -484,7 +516,14 @@ class InputPage(Page):
         if bad or not text:
             self.win.toast(f"Unknown layout: {', '.join(bad) or '(empty)'}")
             return
-        self.win.store.set("input:kb_layout", text)
+        store = self.win.store
+        variants = store.current("input:kb_variant", "") or ""
+        text, variants, moved = latin_first(text, variants)
+        if moved:
+            row.set_text(text)
+            store.values["input:kb_variant"] = variants
+            self.win.toast(f"Shortcuts need a Latin layout first, so layouts are now {text}")
+        store.set("input:kb_layout", text)
         if "," in text and not self.switch:
             self.set_opts(switch="grp:alts_toggle")
             self.win.toast("Switch layouts with Left Alt + Right Alt")
