@@ -73,28 +73,55 @@ DEFAULT_ANIMATIONS = _parse_animations()
 class Store:
     def __init__(self, on_result):
         self.on_result = on_result
-        data = {}
-        for f in (SETTINGS_FILE, LEGACY_FILE):
-            try:
-                data = json.loads(f.read_text())
-                break
-            except Exception:
-                continue
-        self.values = data.get("hyprland", {})        # "section:key" -> value
-        self.cursor = data.get("cursor", {})          # theme, size
-        self.monitors = data.get("monitors", {})      # output -> {enabled, mode, x, y, scale, transform}
-        self.rules = data.get("rules", [])            # per-app window rules
-        self.binds = data.get("binds", {})            # disabled / rebinds / custom
-        self.autostart = data.get("autostart", [])    # [{command, launch, enabled}]
-        self.anim = data.get("animations", {})        # factor, windows, workspaces
-        self.pins = data.get("pins", {})              # appearance kept across theme changes
-        self.nightlight = data.get("nightlight", {})  # temperature, schedule, start, end
-        self.binds.setdefault("disabled", [])
-        self.binds.setdefault("rebinds", [])
-        self.binds.setdefault("custom", [])
+        self.load_warning = None  # shown by the window once it can show toasts
+        data = self._load()
+
+        def get(key, kind):
+            value = data.get(key)
+            if value is None:
+                return kind()
+            if not isinstance(value, kind):
+                self.load_warning = self.load_warning or f"Ignored the unreadable “{key}” part of settings.json"
+                return kind()
+            return value
+
+        self.values = get("hyprland", dict)        # "section:key" -> value
+        self.cursor = get("cursor", dict)          # theme, size
+        self.monitors = get("monitors", dict)      # output -> {enabled, mode, x, y, scale, transform}
+        self.rules = get("rules", list)            # per-app window rules
+        self.binds = get("binds", dict)            # disabled / rebinds / custom
+        self.autostart = get("autostart", list)    # [{command, launch, enabled}]
+        self.anim = get("animations", dict)        # factor, windows, workspaces
+        self.pins = get("pins", dict)              # appearance kept across theme changes
+        self.nightlight = get("nightlight", dict)  # temperature, schedule, start, end
+        for key in ("disabled", "rebinds", "custom"):
+            if not isinstance(self.binds.get(key), list):
+                self.binds[key] = []
         self._pending = None
         self._after_save = []
         self._warned_disabled = False
+
+    def _load(self):
+        """Read settings.json (or the legacy file). An unreadable settings.json is set aside, not lost."""
+        if SETTINGS_FILE.exists():
+            try:
+                data = json.loads(SETTINGS_FILE.read_text())
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+            broken = SETTINGS_FILE.with_name(f"settings.json.broken-{int(time.time())}")
+            try:
+                SETTINGS_FILE.replace(broken)
+            except Exception:
+                pass
+            self.load_warning = f"settings.json couldn't be read, so the app started fresh. The old file is {broken}"
+            return {}
+        try:
+            data = json.loads(LEGACY_FILE.read_text())
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
 
     # ------------------------------------------------------------ values
 
