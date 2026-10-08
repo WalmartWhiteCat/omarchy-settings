@@ -945,16 +945,20 @@ class PowerPage(Page):
                          lambda v: run_async(["omarchy-shell", "notifications", "setDnd", "on" if v else "off"])))
         self.add(g)
 
-        idle = read_shell().get("idle", {})
-        g = Adw.PreferencesGroup(title="Idle", description="Times in minutes. 0 disables.")
+        # Missing values mean Omarchy's defaults, not 0.
+        idle = {**shell_defaults().get("idle", {}), **read_shell().get("idle", {})}
+        g = Adw.PreferencesGroup(title="Idle", description="Times in minutes. To stop idle locking and the "
+                                                           "screensaver altogether, use Keep awake.")
         try:
-            allowed = json.loads(run(["omarchy", "toggle", "idle", "status"])).get("enabled", True)
+            # "enabled" is true when stay-awake is on (see omarchy-toggle-idle's print_status).
+            awake = bool(json.loads(run(["omarchy", "toggle", "idle", "status"])).get("enabled", False))
         except Exception:
-            allowed = True
-        g.add(switch_row("Keep awake", "Never start the screensaver or lock on idle", not allowed,
+            awake = False
+        g.add(switch_row("Keep awake", "Never start the screensaver or lock on idle", awake,
                          lambda v: run_async(["omarchy", "toggle", "idle", "stay-awake" if v else "allow-idle"])))
+        # Omarchy treats 0 as "right away", not "never", so the minimum is half a minute.
         for key, title in (("screensaver", "Start screensaver after"), ("lock", "Lock screen after")):
-            g.add(spin_row(title, None, 0, 240, 0.5, int(idle.get(key, 0) or 0) / 60,
+            g.add(spin_row(title, None, 0.5, 240, 0.5, max(30, int(idle.get(key) or 0)) / 60,
                            lambda v, k=key: self.set_idle(k, int(round(v * 60))), digits=1))
         g.add(self.flag_row("Screensaver", "Allow the screensaver to run", "screensaver-off",
                             ["omarchy", "toggle", "screensaver"]))
@@ -976,9 +980,11 @@ class PowerPage(Page):
 
     def set_idle(self, key, seconds):
         data = read_shell()
-        if data:
-            data.setdefault("idle", {})[key] = seconds
-            write_shell(data)
+        if not data:
+            self.win.toast("Couldn't read ~/.config/omarchy/shell.json, so the idle time wasn't saved")
+            return
+        data.setdefault("idle", {})[key] = max(30, seconds)
+        write_shell(data)
 
     def reset(self, done=None):
         idle = shell_defaults().get("idle", {})

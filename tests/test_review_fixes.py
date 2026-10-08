@@ -311,3 +311,47 @@ def test_docked_laptop_panel_is_never_saved_off(make_store, sandbox, monkeypatch
 def test_generator_never_writes_a_panel_off():
     assert "disabled" not in store_mod.Store.monitor_lua("eDP-1", {"enabled": False, "mode": "1920x1080@60.00"})
     assert "disabled = true" in store_mod.Store.monitor_lua("DP-1", {"enabled": False})
+
+
+# ------------------------------------------------------------------ bar and idle
+
+
+def test_bar_reset_shows_the_bar(sandbox):
+    page = ps.BarPage.__new__(ps.BarPage)
+    page.win = FakeWin()
+    ps.BarPage.reset(page)
+    cmds = sandbox.run_chain[-1]
+    assert ["omarchy", "toggle", "bar", "off"] in cmds  # removes the bar-off flag
+    assert ["omarchy", "toggle", "bar", "on"] not in cmds
+
+
+def test_keep_awake_reads_omarchy_status_the_right_way_round(sandbox, monkeypatch):
+    rows = {}
+    monkeypatch.setattr(ps, "switch_row", lambda t, s, active, cb: rows.setdefault(t, active))
+    monkeypatch.setattr(ps, "spin_row", lambda *a, **k: None)
+    monkeypatch.setattr(ps.PowerPage, "flag_row", lambda *a: None)
+    monkeypatch.setattr(ps.Adw, "PreferencesGroup", lambda **k: type("G", (), {"add": lambda s, r: None})())
+    page = ps.PowerPage.__new__(ps.PowerPage)
+    page.win, page.add = FakeWin(), lambda g: None
+    monkeypatch.setattr(ps, "reset_group", lambda *a, **k: None)
+    for status, expected in (('{"enabled":true,"class":"enabled"}', True), ('{"enabled":false}', False)):
+        rows.clear()
+        sandbox.run_output[("omarchy", "toggle", "idle", "status")] = status
+        ps.PowerPage.build(page)
+        assert rows["Keep awake"] is expected
+
+
+def test_idle_times_never_saved_as_zero(sandbox):
+    ps.SHELL_JSON.parent.mkdir(parents=True, exist_ok=True)
+    ps.SHELL_JSON.write_text('{"idle": {"lock": 300}}')
+    page = ps.PowerPage.__new__(ps.PowerPage)
+    page.win = FakeWin()
+    ps.PowerPage.set_idle(page, "lock", 0)
+    assert json.loads(ps.SHELL_JSON.read_text())["idle"]["lock"] == 30
+
+
+def test_idle_change_without_shell_json_says_so(sandbox):
+    page = ps.PowerPage.__new__(ps.PowerPage)
+    page.win = FakeWin()
+    ps.PowerPage.set_idle(page, "lock", 600)
+    assert not ps.SHELL_JSON.exists() and "wasn't saved" in page.win.toasts[-1]
