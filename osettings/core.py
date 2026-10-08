@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -245,8 +246,14 @@ def lua_str(s):
     return "".join(out)
 
 
+LUA_KEYWORDS = {"and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if",
+                "in", "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"}
+
+
 def lua_key(k):
-    return k if k.isidentifier() else f"[{lua_str(k)}]"
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k) and k not in LUA_KEYWORDS:
+        return k
+    return f"[{lua_str(k)}]"
 
 
 def lua_value(v, indent=0):
