@@ -35,6 +35,16 @@ exit 0
 """
 
 
+def unique_path(path):
+    """`path`, or `name-2.ext`, `name-3.ext`… when that file already exists."""
+    n = 2
+    candidate = path
+    while candidate.exists():
+        candidate = path.with_name(f"{path.stem}-{n}{path.suffix}")
+        n += 1
+    return candidate
+
+
 def flowbox():
     return Gtk.FlowBox(selection_mode=Gtk.SelectionMode.SINGLE, homogeneous=True, max_children_per_line=4,
                        min_children_per_line=2, row_spacing=12, column_spacing=12)
@@ -381,7 +391,7 @@ class BackgroundPage(Page):
         last = None
         for i in range(files.get_n_items()):
             src = Path(files.get_item(i).get_path())
-            last = dest / src.name
+            last = unique_path(dest / src.name)
             shutil.copy2(src, last)
         self.populate()
         if last:
