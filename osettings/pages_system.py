@@ -57,6 +57,30 @@ TRIAL_SECONDS = 15
 WATCHDOG = 'sleep "$2"; if [ -e "$1" ]; then rm -f "$1"; hyprctl reload >/dev/null 2>&1; fi'
 
 
+def monitors_lua_extras(name):
+    """Fields other than mode/position/scale/rotation that monitors.lua sets for `name`.
+
+    The app's rule for a screen replaces any earlier rule for it, so these would be lost."""
+    try:
+        text = MONITORS_LUA.read_text()
+    except Exception:
+        return []
+    text = "\n".join(l for l in text.splitlines() if not l.strip().startswith("--"))
+    extras = set()
+    for body in re.findall(r"hl\.monitor\(\s*\{(.*?)\}\s*\)", text, re.S):
+        if re.search(rf'\boutput\s*=\s*"(desc:)?{re.escape(name)}"', body):
+            depth, fields = 0, []
+            for tok in re.finditer(r"[{}]|\b(\w+)\s*=", body):  # top-level field names only
+                if tok.group(0) == "{":
+                    depth += 1
+                elif tok.group(0) == "}":
+                    depth -= 1
+                elif depth == 0:
+                    fields.append(tok.group(1))
+            extras |= set(fields) - MONITOR_RULE_FIELDS
+    return sorted(extras)
+
+
 def monitor_modes(m):
     """Available modes as 'WxH@R.RR', best first."""
     modes = []
@@ -157,7 +181,12 @@ class DisplaysPage(Page):
     def monitor_group(self, m):
         name = m["name"]
         e = self.entry(m)
-        g = Adw.PreferencesGroup(title=f"{name}", description=m.get("description", ""))
+        description = m.get("description", "")
+        extras = monitors_lua_extras(name)
+        if extras:
+            description += (f"\n⚠ monitors.lua also sets {', '.join(extras)} for this screen. Changing it here "
+                            "replaces that rule, so those settings would no longer apply.")
+        g = Adw.PreferencesGroup(title=f"{name}", description=description)
 
         def change(key, value):
             # The entry is the draft from the first change on, so later fix-ups (like the

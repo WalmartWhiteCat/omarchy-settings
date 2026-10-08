@@ -114,8 +114,7 @@ def test_apply_is_a_live_trial_until_kept(make_store, sandbox, monkeypatch):
     page.draft["DP-1"] = dict(page.rows["DP-1"]["entry"], scale=1.25)
     ps.DisplaysPage.apply(page)
 
-    marker = store_mod.CONFIG_DIR / ps.TRIAL_MARKER_NAME
-    assert marker.exists()
+    (marker,) = store_mod.CONFIG_DIR.glob(ps.TRIAL_MARKER_NAME + "-*")
     watchdog = sandbox.spawn[-1]
     assert watchdog[:3] == ["sh", "-c", ps.WATCHDOG] and watchdog[4] == str(marker)
     evals = [c for c in sandbox.run_async if c[:2] == ["hyprctl", "eval"]]
@@ -136,7 +135,7 @@ def test_revert_reloads_and_saves_nothing(make_store, sandbox, monkeypatch):
     dialogs[-1].on_no()
     assert ["hyprctl", "reload"] in sandbox.run_async
     assert st.monitors == {} and not store_mod.HYPR_LUA.exists()
-    assert not (store_mod.CONFIG_DIR / ps.TRIAL_MARKER_NAME).exists()
+    assert not list(store_mod.CONFIG_DIR.glob(ps.TRIAL_MARKER_NAME + "*"))
     dialogs[-1].on_yes()  # a late "keep" after reverting must not save
     assert st.monitors == {}
 
@@ -387,3 +386,30 @@ def test_night_light_off_and_not_running(sandbox, make_store, monkeypatch):
     ps.NightLightPage.toggle(page, True)
     assert sandbox.run_chain[-1][0] == ["omarchy", "toggle", "nightlight"]  # starts hyprsunset
     assert sandbox.run_chain[-1][1] == ["hyprctl", "hyprsunset", "temperature", "4000"]
+
+
+def test_each_trial_has_its_own_marker(make_store, sandbox, monkeypatch):
+    st = make_store()
+    page, dialogs = make_display_page(st, monkeypatch)
+    page.draft["DP-1"] = dict(page.rows["DP-1"]["entry"], scale=1.25)
+    ps.DisplaysPage.apply(page)
+    first = sandbox.spawn[-1][4]
+    dialogs[-1].on_yes()
+    page.draft["DP-1"] = dict(page.rows["DP-1"]["entry"], scale=2)
+    ps.DisplaysPage.apply(page)
+    second = sandbox.spawn[-1][4]
+    assert first != second
+    # the first trial's watchdog looks for its own marker, which Keep already removed
+    assert not ps.Path(first).exists() and ps.Path(second).exists()
+
+
+def test_monitors_lua_extras(sandbox):
+    ps.MONITORS_LUA.write_text('''
+hl.monitor({ output = "DP-1", mode = "2560x1440@144", position = "0x0", scale = 1, bitdepth = 10,
+             reserved_area = { top = 10, bottom = 0 }, cm = "hdr" })
+-- hl.monitor({ output = "DP-1", vrr = 1 })
+hl.monitor({ output = "DP-2", mode = "preferred", position = "auto", scale = 1 })
+''')
+    assert ps.monitors_lua_extras("DP-1") == ["bitdepth", "cm", "reserved_area"]
+    assert ps.monitors_lua_extras("DP-2") == []
+    assert ps.monitors_lua_extras("HDMI-A-1") == []
