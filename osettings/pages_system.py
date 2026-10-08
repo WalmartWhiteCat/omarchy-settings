@@ -679,8 +679,9 @@ class TextPage(Page):
                 except Exception:
                     pass
         self._size_timer = None
+        # omarchy display text size accepts 9–20 px
         self.size = spin_row("Text size", "Scales text in the shell, GTK apps and terminals (default 12)",
-                             8, 32, 1, size, self.on_size)
+                             9, 20, 1, min(20, max(9, size)), self.on_size)
         g.add(self.size)
         self.add(g)
         self.add(reset_group(self.win, "Restore default fonts?",
