@@ -224,6 +224,29 @@ def rewrite_colors(text, changes):
 ORIGINAL_SUFFIX = ".omarchy-settings-original"
 
 
+def undo_color_edit(theme_dir_):
+    """Remove the app's color edit in one user theme folder. True if there was one."""
+    target = theme_dir_ / "colors.toml"
+    original = theme_dir_ / ("colors.toml" + ORIGINAL_SUFFIX)
+    if (theme_dir_ / OVERLAY_MARK).exists():
+        target.unlink(missing_ok=True)
+        (theme_dir_ / OVERLAY_MARK).unlink(missing_ok=True)
+        if theme_dir_.is_dir() and not any(theme_dir_.iterdir()):
+            theme_dir_.rmdir()
+        return True
+    if original.exists():
+        original.replace(target)
+        return True
+    return False
+
+
+def undo_all_color_edits():
+    """Restore all defaults: undo color edits in every theme, not just the current one."""
+    if not USER_THEMES.is_dir():
+        return 0
+    return sum(undo_color_edit(d) for d in sorted(USER_THEMES.iterdir()) if d.is_dir())
+
+
 class ColorsPage(Page):
     key, title, icon = "colors", "Theme Colors", "color-select-symbolic"
 
@@ -315,17 +338,7 @@ class ColorsPage(Page):
         run_async(["omarchy", "theme", "set", self.slug], finished)
 
     def reset(self, done=None):
-        target = self.target()
-        d = target.parent
-        original = target.with_name("colors.toml" + ORIGINAL_SUFFIX)
-        if (d / OVERLAY_MARK).exists():
-            target.unlink(missing_ok=True)
-            (d / OVERLAY_MARK).unlink(missing_ok=True)
-            if d.is_dir() and not any(d.iterdir()):
-                d.rmdir()
-        elif original.exists():
-            original.replace(target)
-        else:
+        if not undo_color_edit(self.target().parent):
             self.win.toast("These colors have not been edited")
             return done and done()
         self.apply_theme("Original colors restored", done)

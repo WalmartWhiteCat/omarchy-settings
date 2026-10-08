@@ -5,7 +5,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from .binds import parse_default_binds
 from .core import DEFAULT_THEME, confirm
 from .pages_keys import AutostartPage, KeysPage, leave_capture
-from .pages_look import BackgroundPage, ColorsPage, RulesPage, ThemePage, WindowsPage
+from .pages_look import BackgroundPage, ColorsPage, RulesPage, ThemePage, WindowsPage, undo_all_color_edits
 from .pages_system import (AppsPage, BarPage, CursorPage, DisplaysPage, InputPage, NightLightPage, PowerPage,
                            TextPage)
 from .store import Store
@@ -165,6 +165,11 @@ class SettingsWindow(Adw.ApplicationWindow):
                 self.toast("All settings restored to defaults")
                 return
             key = steps.pop(0)
+            if key == "colors":
+                # Every theme's edits, not just the current one's; the theme step that follows
+                # applies the default theme from the restored files.
+                undo_all_color_edits()
+                return next_step()
             try:
                 self.page(key).reset(lambda: GLib.idle_add(lambda: next_step() and False))
             except Exception as e:  # keep going; report what failed

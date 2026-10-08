@@ -290,3 +290,22 @@ def test_save_refuses_when_result_would_be_invalid(sandbox, monkeypatch):
     assert not (pages_look.USER_THEMES / "broken").exists()
     assert page.applied == []
     assert any("not saved" in t for t in page.win.toasts)
+
+
+def test_undo_all_color_edits_covers_every_theme(sandbox):
+    themes = pages_look.USER_THEMES
+    overlay = themes / "tokyo-night"
+    overlay.mkdir(parents=True)
+    (overlay / "colors.toml").write_text('accent = "#FF0000"\n')
+    (overlay / pages_look.OVERLAY_MARK).write_text("x")
+    mine = themes / "mine"
+    mine.mkdir()
+    (mine / "colors.toml").write_text('accent = "#00FF00"\n')
+    (mine / ("colors.toml" + pages_look.ORIGINAL_SUFFIX)).write_text('accent = "#123456"\n')
+    untouched = themes / "other"
+    untouched.mkdir()
+    (untouched / "colors.toml").write_text('accent = "#ABCDEF"\n')
+    assert pages_look.undo_all_color_edits() == 2
+    assert not overlay.exists()
+    assert (mine / "colors.toml").read_text() == 'accent = "#123456"\n'
+    assert (untouched / "colors.toml").read_text() == 'accent = "#ABCDEF"\n'
