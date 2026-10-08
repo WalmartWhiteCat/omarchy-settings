@@ -15,4 +15,4 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from osettings.window import SettingsApp  # noqa: E402
 
 if __name__ == "__main__":
-    raise SystemExit(SettingsApp().run(None))
+    raise SystemExit(SettingsApp().run(sys.argv))

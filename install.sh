@@ -5,10 +5,13 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCHER="${XDG_DATA_HOME:-$HOME/.local/share}/applications/omarchy-settings.desktop"
+# The Desktop Notes widget's settings button runs `omarchy-settings --page notes`.
+COMMAND="$HOME/.local/bin/omarchy-settings"
 
 if [[ ${1:-} == "--uninstall" ]]; then
   rm -f "$LAUNCHER"
-  echo "Removed $LAUNCHER"
+  [[ -L $COMMAND ]] && rm -f "$COMMAND"
+  echo "Removed $LAUNCHER and $COMMAND"
   exit 0
 fi
 
@@ -33,3 +36,11 @@ if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$LAUNCHER"
 fi
 echo "Installed $LAUNCHER"
+
+if [[ -e $COMMAND && ! -L $COMMAND ]]; then
+  echo "Left $COMMAND alone: it isn't a link this script made." >&2
+else
+  mkdir -p "$(dirname "$COMMAND")"
+  ln -sfn "$DIR/omarchy-settings.py" "$COMMAND"
+  echo "Installed $COMMAND"
+fi

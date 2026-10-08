@@ -21,9 +21,10 @@ An Omarchy install with Hyprland's Lua config (Hyprland 0.55+). Everything else 
 ## Install and run
 
 ```bash
-./install.sh            # adds "Omarchy Settings" to the app launcher
+./install.sh            # adds "Omarchy Settings" to the app launcher and an omarchy-settings command
 ./install.sh --uninstall
 python3 omarchy-settings.py   # or run it directly
+omarchy-settings --page notes # open on a page (install.sh links the command into ~/.local/bin)
 ```
 
 ## How it changes your system

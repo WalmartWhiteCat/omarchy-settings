@@ -200,9 +200,24 @@ class SettingsWindow(Adw.ApplicationWindow):
 
 class SettingsApp(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="org.omarchy.Settings", flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+        # Command lines reach the running instance, so `--page` works when the app is already open
+        # (the Desktop Notes widget's settings button uses it).
+        super().__init__(application_id="org.omarchy.Settings", flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+        self.add_main_option("page", 0, GLib.OptionFlags.NONE, GLib.OptionArg.STRING,
+                             "Open on this page, e.g. notes", "KEY")
 
     def do_activate(self):
         win = self.props.active_window or SettingsWindow(self)
         win.present()
 
+    def do_command_line(self, command_line):
+        self.activate()
+        value = command_line.get_options_dict().lookup_value("page", GLib.VariantType.new("s"))
+        key = value.get_string() if value else None
+        win = self.props.active_window
+        if key and win is not None:
+            if key in win.classes:
+                win.select(key)
+            else:
+                win.toast(f"There's no settings page called “{key}”")
+        return 0

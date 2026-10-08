@@ -1,4 +1,4 @@
-"""Desktop Notes page: the widget's config file."""
+"""Desktop Notes page: the widget's config file, and opening the app on a page."""
 
 import json
 
@@ -114,3 +114,50 @@ def test_notes_page_is_in_the_sidebar_and_restore_all():
     keys = [cls.key for _, classes in window.SECTIONS for cls in classes]
     assert "notes" in keys and "notes" in window.RESET_ORDER
     assert set(window.RESET_ORDER) <= set(keys)
+
+
+class FakeOptions:
+    def __init__(self, page):
+        self.page = page
+
+    def lookup_value(self, name, _type):
+        return GLib.Variant("s", self.page) if name == "page" and self.page is not None else None
+
+
+class FakeCommandLine:
+    def __init__(self, page):
+        self.options = FakeOptions(page)
+
+    def get_options_dict(self):
+        return self.options
+
+
+class FakeApp:
+    def __init__(self):
+        self.win = FakeWin()
+        self.activated = 0
+
+    def activate(self):
+        self.activated += 1
+
+    @property
+    def props(self):
+        return type("Props", (), {"active_window": self.win})()
+
+
+def test_page_option_opens_that_page():
+    app = FakeApp()
+    assert window.SettingsApp.do_command_line(app, FakeCommandLine("notes")) == 0
+    assert app.activated == 1 and app.win.selected == ["notes"]
+
+
+def test_no_page_option_just_opens_the_app():
+    app = FakeApp()
+    window.SettingsApp.do_command_line(app, FakeCommandLine(None))
+    assert app.activated == 1 and app.win.selected == [] and app.win.toasts == []
+
+
+def test_unknown_page_says_so():
+    app = FakeApp()
+    window.SettingsApp.do_command_line(app, FakeCommandLine("nope"))
+    assert app.win.selected == [] and "nope" in app.win.toasts[0]
