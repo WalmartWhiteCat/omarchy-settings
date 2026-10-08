@@ -87,14 +87,16 @@ def parse_default_binds():
                 out.append({"keys": keys, "description": desc or "", "line": line,
                             "rebindable": safe, "group": name})
                 seen.add(normalize(keys))
-            # crude block tracking so we never lift a line out of a loop or function
-            opens = re.match(r"^(for|while|if|local function|function)\b", line) or \
-                re.search(r"=\s*function\b", line) or re.search(r"\bfunction\s*\(", line)
+            # crude block tracking so we never lift a line out of a loop or function;
+            # strings are blanked first so a description like "function(s)" can't open a block
+            code = _strip_strings(line)
+            opens = re.match(r"^(for|while|if|local function|function)\b", code) or \
+                re.search(r"=\s*function\b", code) or re.search(r"\bfunction\s*\(", code)
             if opens:
-                kind = "if" if line.startswith("if") else ("for" if line.startswith(("for", "while")) else "function")
-                if not re.search(r"\bend\)?\s*$", line):
+                kind = "if" if code.startswith("if") else ("for" if code.startswith(("for", "while")) else "function")
+                if not re.search(r"\bend\)?\s*$", code):
                     stack.append(kind)
-            elif re.match(r"^end\b", line) and stack:
+            elif re.match(r"^end\b", code) and stack:
                 stack.pop()
     # Bindings built in loops/functions only show up in Omarchy's printed list.
     for row in run(["omarchy", "menu", "keybindings", "--print"]).splitlines():
