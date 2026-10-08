@@ -146,6 +146,28 @@ class Store:
 
     # ------------------------------------------------------------ persistence
 
+    def refresh_rebinds(self, defaults):
+        """Re-read each changed shortcut's line from Omarchy's current binding files.
+
+        A rebind stores a copy of Omarchy's line; after an update that copy can be stale. Lines
+        are refreshed from the binding at the same original key with the same description. A
+        rebind whose binding is gone (or can no longer be rebound safely) is dropped. Returns
+        (changed, dropped_descriptions)."""
+        by_key = {(b["keys"], b["description"]): b for b in defaults if b["line"]}
+        kept, dropped, changed = [], [], False
+        for rb in self.binds["rebinds"]:
+            b = by_key.get((rb.get("old"), rb.get("description", "")))
+            if not b or not b["rebindable"]:
+                dropped.append(rb.get("description") or rb.get("old", "?"))
+                changed = True
+                continue
+            if rb.get("line") != b["line"]:
+                rb["line"] = b["line"]
+                changed = True
+            kept.append(rb)
+        self.binds["rebinds"] = kept
+        return changed, dropped
+
     def to_json(self):
         return {"hyprland": self.values, "cursor": self.cursor, "monitors": self.monitors,
                 "rules": self.rules, "binds": self.binds, "autostart": self.autostart,

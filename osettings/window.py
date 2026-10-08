@@ -2,6 +2,7 @@
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
+from .binds import parse_default_binds
 from .core import DEFAULT_THEME, confirm
 from .pages_keys import AutostartPage, KeysPage, leave_capture
 from .pages_look import BackgroundPage, ColorsPage, RulesPage, ThemePage, WindowsPage
@@ -86,6 +87,20 @@ class SettingsWindow(Adw.ApplicationWindow):
         self.add_breakpoint(bp)
         self.connect("close-request", lambda *_: leave_capture() or False)
         sidebar.select_row(sidebar.get_row_at_index(0))
+        if self.store.load_warning:
+            self.toast(self.store.load_warning)
+        self.refresh_rebinds()
+
+    def refresh_rebinds(self):
+        """Keep changed shortcuts in step with Omarchy's binding files after an update."""
+        if not self.store.binds["rebinds"]:
+            return
+        changed, dropped = self.store.refresh_rebinds(parse_default_binds())
+        if changed:
+            self.store.save_now()
+        if dropped:
+            self.toast(f"Omarchy no longer has {len(dropped)} shortcut(s) you had changed, so those changes "
+                       f"were removed: {', '.join(dropped)[:120]}")
 
     @staticmethod
     def heading(text):
@@ -161,7 +176,8 @@ class SettingsWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------ feedback
 
     def toast(self, text):
-        self.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(str(text)), timeout=3))
+        text = str(text)
+        self.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(text), timeout=6 if len(text) > 80 else 3))
 
     def busy(self, text):
         self.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(text), timeout=2))
