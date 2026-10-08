@@ -85,7 +85,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 640sp"))
         bp.add_setter(self.split, "collapsed", True)
         self.add_breakpoint(bp)
-        self.connect("close-request", lambda *_: leave_capture() or False)
+        self.connect("close-request", lambda *_: leave_capture(wait=True) or False)
         sidebar.select_row(sidebar.get_row_at_index(0))
         if self.store.load_warning:
             self.toast(self.store.load_warning)

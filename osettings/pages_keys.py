@@ -20,8 +20,15 @@ def enter_capture():
     run_async(["hyprctl", "dispatch", f'hl.dsp.submap("{CAPTURE_SUBMAP}")'])
 
 
-def leave_capture():
-    run_async(["hyprctl", "dispatch", 'hl.dsp.submap("reset")'])
+def leave_capture(wait=False):
+    """Leave the recording submap. `wait` blocks until done, for when the app is about to quit."""
+    cmd = ["hyprctl", "dispatch", 'hl.dsp.submap("reset")']
+    run(cmd) if wait else run_async(cmd)
+
+
+# Keys that move focus or confirm in a dialog; without a modifier they are never recorded.
+NAVIGATION = {"Tab", "ISO_Left_Tab", "space", "Return", "KP_Enter", "Escape", "Up", "Down", "Left", "Right"}
+CTRL_MODS = Gdk.ModifierType.SUPER_MASK | Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK
 
 
 class ShortcutDialog(Adw.Dialog):
@@ -40,8 +47,14 @@ class ShortcutDialog(Adw.Dialog):
         tv.add_top_bar(header)
 
         page_ = Adw.PreferencesPage()
-        g = Adw.PreferencesGroup(description="Press the new key combination. Your other shortcuts are paused "
-                                             "while this window is open (Super + Escape resumes them).")
+        # The pause needs the submap from the app's generated file; without it Hyprland
+        # refuses the switch, so don't claim shortcuts are paused.
+        self.pausing = require_state() == "loaded"
+        g = Adw.PreferencesGroup(description=(
+            "Press the new key combination. Your other shortcuts are paused while this window is open "
+            "(Super + Escape resumes them)." if self.pausing else
+            "Press the new key combination. Your other shortcuts are NOT paused, because the app's Hyprland "
+            "config isn't loaded, so combinations Omarchy already uses will also do their usual thing."))
         self.shown = Gtk.Label(label=pretty(keys) if keys else "Waiting for keys…", margin_top=18, margin_bottom=6)
         self.shown.add_css_class("title-1")
         g.add(self.shown)
@@ -76,13 +89,19 @@ class ShortcutDialog(Adw.Dialog):
         keys_ctl = Gtk.EventControllerKey(propagation_phase=Gtk.PropagationPhase.CAPTURE)
         keys_ctl.connect("key-pressed", self.on_key)
         self.add_controller(keys_ctl)
-        self.connect("closed", lambda *_: (self._cancel_timeout(), leave_capture()))
-        self._timeout = GLib.timeout_add_seconds(60, self._timed_out)
-        enter_capture()
+        self.connect("closed", lambda *_: (self._cancel_timeout(), self.pausing and leave_capture()))
+        self._timeout = None
+        if self.pausing:
+            self._timeout = GLib.timeout_add_seconds(60, self._timed_out)
+            enter_capture()
 
     def _timed_out(self):
+        # Safety limit: give the user their shortcuts back, and say so.
         self._timeout = None
+        self.pausing = False
         leave_capture()
+        self.conflict.set_label("Your shortcuts are active again after 60 seconds. Close and reopen this window "
+                                "to record without them firing.")
         return False
 
     def _cancel_timeout(self):
@@ -102,9 +121,11 @@ class ShortcutDialog(Adw.Dialog):
 
     def on_key(self, _ctl, keyval, keycode, state):
         focus = self.get_root().get_focus() if self.get_root() else None
-        mods = Gdk.ModifierType.SUPER_MASK | Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK
-        if isinstance(focus, Gtk.Text) and not (state & mods) and Gdk.keyval_to_unicode(keyval):
-            return False  # typing into an entry
+        held = state & CTRL_MODS
+        if isinstance(focus, Gtk.Text) and not held:
+            return False  # typing or moving the cursor in a text field (arrows, Home, F-keys too)
+        if not held and Gdk.keyval_name(keyval) in NAVIGATION:
+            return False  # moving focus between buttons
         keys = keys_from_event(keycode, state)
         if not keys:
             return False
@@ -114,7 +135,12 @@ class ShortcutDialog(Adw.Dialog):
     def set_keys(self, keys):
         if not keys:
             return
-        # Reuse the exact spelling of a binding we would replace, so unbinding it matches.
+        if not bare_ok(keys):
+            self.conflict.set_label(f"{pretty(keys)} on its own would stop that key working in every app. "
+                                    "Hold Super, Ctrl or Alt with it.")
+            return
+        # Reuse the exact spelling of a binding we would replace (including code:N keys),
+        # so unbinding it matches.
         clash = self.page.who_uses(keys, ignore=self.ignore)
         if clash:
             keys = clash["keys"]
