@@ -918,7 +918,8 @@ class BarPage(Page):
         clock = self.find_widget(shell_defaults(), "omarchy.clock") or {}
         cmds = [["omarchy", "bar", "position", d.get("position", "top")],
                 ["omarchy", "bar", "transparent", "true" if d.get("transparent") else "false"],
-                ["omarchy", "toggle", "bar", "on"]]
+                # `omarchy toggle bar` drives a bar-off flag: "off" removes it, which shows the bar.
+                ["omarchy", "toggle", "bar", "off"]]
         for k in ("format", "formatAlt"):
             if k in clock:
                 cmds.append(["omarchy", "bar", "set", "omarchy.clock", k, clock[k]])
