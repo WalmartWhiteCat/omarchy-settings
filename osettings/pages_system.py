@@ -160,13 +160,13 @@ class DisplaysPage(Page):
             if key == "mode":
                 self.refresh_scales(name)
 
-        g.add(switch_row("Enabled", None, e["enabled"], lambda v: change("enabled", v)))
-        modes = []
-        for mode in m.get("availableModes", []):
-            mm = re.match(r"(\d+)x(\d+)@([\d.]+)Hz", mode)
-            if mm:
-                modes.append(f"{mm.group(1)}x{mm.group(2)}@{float(mm.group(3)):.2f}")
-        modes = sorted(set(modes), key=lambda s: [-float(x) for x in re.split("[x@]", s)])
+        if INTERNAL_PANEL.match(name):
+            row = Adw.ActionRow(title="Enabled", subtitle="Built-in screen: Omarchy turns it off by itself when "
+                                                          "the lid is closed with another screen connected")
+            g.add(row)
+        else:
+            g.add(switch_row("Enabled", None, e["enabled"], lambda v: change("enabled", v)))
+        modes = monitor_modes(m)
         current = e["mode"] if e["mode"] in modes else (modes[0] if modes else e["mode"])
         labels = [f"{s.split('@')[0].replace('x', ' × ')}  ·  {float(s.split('@')[1]):g} Hz" for s in modes]
         g.add(combo_row("Resolution and refresh rate", None, labels, current, lambda v: change("mode", v), modes))
