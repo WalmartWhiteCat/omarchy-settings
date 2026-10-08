@@ -440,6 +440,7 @@ def kitchen_sink():
         "animations": {"factor": 1.5, "windows": "gnomed", "workspaces": "slidefade 20%"},
         "pins": {"color_scheme": "prefer-dark"},
         "nightlight": {"schedule": True, "start": "21:00", "end": "06:30", "temperature": 3800},
+        "flags": {"omarchy_opacity": False},
     }
 
 
@@ -455,3 +456,24 @@ def test_kitchen_sink(make_store):
     # every generated statement sits inside a section() so one failure can't take the rest down
     for line in out[len(store_mod.HEADER):].splitlines():
         assert not line or line.startswith(("section(", "  ")) or line == "end)", line
+
+
+def test_omarchy_transparency_off(sandbox):
+    apps = sandbox.omarchy / "default/hypr/apps"
+    apps.mkdir(parents=True)
+    (sandbox.omarchy / "default/hypr/windows.lua").write_text(
+        'o.window({ tag = "default-opacity" }, { opacity = "0.985 0.96" })\n')
+    (apps / "browser.lua").write_text(
+        'o.window({ tag = "firefox-based-browser" }, { tag = "-default-opacity", opacity = "1.0 0.985" })\n'
+        'o.window({ tag = "video" }, { opacity = "1 1" })\n')
+    assert store_mod.omarchy_opacity_tags() == ["default-opacity", "firefox-based-browser"]
+
+    s = store_mod.Store(lambda e: None)
+    s.rules = [{"class": "foot", "opacity_active": 0.8}]
+    assert "Omarchy window transparency off" not in s.render_lua()  # on by default
+    s.flags["omarchy_opacity"] = False
+    lua = s.render_lua()
+    assert luac_error(lua) is None
+    assert 'hl.window_rule({ match = { tag = "default-opacity" }, opacity = "1.00 1.00" })' in lua
+    # the user's own per-app rules come later, so they still win
+    assert lua.index("Omarchy window transparency off") < lua.index('section("window rule foot"')

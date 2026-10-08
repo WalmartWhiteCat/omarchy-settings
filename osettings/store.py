@@ -71,6 +71,27 @@ def _parse_animations():
 
 DEFAULT_ANIMATIONS = _parse_animations()
 
+OPACITY_RULE = re.compile(r'o\.window\(\s*\{\s*tag\s*=\s*"([^"]+)"\s*\}\s*,\s*\{[^}]*opacity\s*=\s*"([^"]+)"')
+
+
+def omarchy_opacity_tags():
+    """Tags Omarchy's window rules make less than fully opaque, e.g. default-opacity
+    ("0.985 0.96") and the browser tags ("1.0 0.985"), read from its rule files."""
+    tags = []
+    base = OMARCHY_PATH / "default/hypr"
+    for f in [base / "windows.lua", *sorted((base / "apps").glob("*.lua"))]:
+        try:
+            text = f.read_text()
+        except Exception:
+            continue
+        for tag, value in OPACITY_RULE.findall(text):
+            try:
+                if any(float(x) < 1 for x in value.split() if x.replace(".", "", 1).isdigit()):
+                    tags.append(tag)
+            except ValueError:
+                continue
+    return sorted(set(tags)) or ["default-opacity"]
+
 
 class Store:
     def __init__(self, on_result):
@@ -97,6 +118,7 @@ class Store:
         self.anim = get("animations", dict)        # factor, windows, workspaces
         self.pins = get("pins", dict)              # appearance kept across theme changes
         self.nightlight = get("nightlight", dict)  # temperature, schedule, start, end
+        self.flags = get("flags", dict)            # omarchy_opacity: False = Omarchy's transparency off
         for key in ("disabled", "rebinds", "custom"):
             if not isinstance(self.binds.get(key), list):
                 self.binds[key] = []
@@ -245,7 +267,7 @@ class Store:
     def to_json(self):
         return {"hyprland": self.values, "cursor": self.cursor, "monitors": self.monitors,
                 "rules": self.rules, "binds": self.binds, "autostart": self.autostart,
-                "animations": self.anim, "pins": self.pins, "nightlight": self.nightlight}
+                "animations": self.anim, "pins": self.pins, "nightlight": self.nightlight, "flags": self.flags}
 
     def schedule_save(self, after=None):
         if after:
@@ -348,6 +370,14 @@ class Store:
 
         for name, m in self.monitors.items():
             section(f"monitor {name}", [self.monitor_lua(name, m)])
+
+        if self.flags.get("omarchy_opacity") is False:
+            # Omarchy's window rules make most windows slightly see-through, and rules win over
+            # the global opacity settings. Later rules win, so this comes after Omarchy's and
+            # before the user's own per-app rules.
+            section("Omarchy window transparency off", [
+                f"hl.window_rule({lua_value({'match': {'tag': tag}, 'opacity': '1.00 1.00'})})"
+                for tag in omarchy_opacity_tags()])
 
         for i, r in enumerate(self.rules):
             if r.get("enabled", True) and r.get("class"):

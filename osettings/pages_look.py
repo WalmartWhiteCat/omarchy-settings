@@ -469,7 +469,22 @@ class WindowsPage(Page):
         self.border_rows(g)
         self.add(g)
 
-        g = Adw.PreferencesGroup(title="Transparency and dimming")
+        g = Adw.PreferencesGroup(title="Transparency and dimming",
+                                 description="The opacity sliders apply on top of window rules, including "
+                                             "Omarchy's own, so 1.00 only means fully opaque with the switch "
+                                             "below turned off.")
+
+        def set_omarchy_opacity(on):
+            if on:
+                h.flags.pop("omarchy_opacity", None)
+            else:
+                h.flags["omarchy_opacity"] = False
+            h.schedule_save()
+
+        g.add(switch_row("Omarchy's subtle transparency",
+                         "Omarchy makes most windows 98.5% opaque when focused and 96% when not (browsers 100% "
+                         "and 98.5%). Turn off for fully opaque windows.",
+                         h.flags.get("omarchy_opacity") is not False, set_omarchy_opacity))
         g.add(scale_row("Focused window opacity", None, 0.3, 1.0, 0.01, cur("decoration:active_opacity", 1.0), 2,
                         setter("decoration:active_opacity")))
         g.add(scale_row("Unfocused window opacity", None, 0.3, 1.0, 0.01,
@@ -618,6 +633,7 @@ class WindowsPage(Page):
         h.reset(prefix=WINDOW_PREFIXES)
         h.reset(["animations:enabled"])
         h.anim = {}
+        h.flags.pop("omarchy_opacity", None)
 
         def rebuilt():
             self.rebuild()
