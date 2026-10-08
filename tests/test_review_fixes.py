@@ -355,3 +355,35 @@ def test_idle_change_without_shell_json_says_so(sandbox):
     page.win = FakeWin()
     ps.PowerPage.set_idle(page, "lock", 600)
     assert not ps.SHELL_JSON.exists() and "wasn't saved" in page.win.toasts[-1]
+
+
+# ------------------------------------------------------------------ night light
+
+
+def night_page(make_store, monkeypatch, running=True):
+    page = ps.NightLightPage.__new__(ps.NightLightPage)
+    page.win = FakeWin(make_store())
+    monkeypatch.setattr(ps, "run_ok", lambda cmd: running if cmd[0] == "pgrep" else False)
+    return page
+
+
+def test_night_light_on_sets_the_warmth_directly(sandbox, make_store, monkeypatch):
+    page = night_page(make_store, monkeypatch)
+    page.win.store.nightlight["temperature"] = 3500
+    ps.NightLightPage.toggle(page, True)
+    cmds = sandbox.run_chain[-1]
+    assert cmds[0] == ["hyprctl", "hyprsunset", "temperature", "3500"]
+    assert ["omarchy", "toggle", "nightlight"] not in cmds  # it would go to 6500 K from neutral
+
+
+def test_night_light_off_and_not_running(sandbox, make_store, monkeypatch):
+    page = night_page(make_store, monkeypatch)
+    ps.NightLightPage.toggle(page, False)
+    assert sandbox.run_chain[-1][0] == ["hyprctl", "hyprsunset", "temperature", "6500"]
+    page = night_page(make_store, monkeypatch, running=False)
+    sandbox.run_chain.clear()
+    ps.NightLightPage.toggle(page, False)
+    assert sandbox.run_chain == []
+    ps.NightLightPage.toggle(page, True)
+    assert sandbox.run_chain[-1][0] == ["omarchy", "toggle", "nightlight"]  # starts hyprsunset
+    assert sandbox.run_chain[-1][1] == ["hyprctl", "hyprsunset", "temperature", "4000"]
