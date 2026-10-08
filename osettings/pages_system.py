@@ -8,10 +8,11 @@ from pathlib import Path
 
 from gi.repository import Adw, GLib, Gtk, Pango
 
-from .core import (DEFAULT_FONT, HOME, HYPR_DIR, OMARCHY_PATH, SHELL_JSON, Page, backup, clear_group, combo_row,
-                   confirm, group_add, gsetting, hypr_json, icon_button, read_json, reset_group, run, run_async,
-                   run_chain, run_ok, scale_row, spin_row, switch_row, write_atomic)
+from .core import (CONFIG_DIR, DEFAULT_FONT, HOME, HYPR_DIR, OMARCHY_PATH, SHELL_JSON, Page, backup, clear_group,
+                   combo_row, confirm, group_add, gsetting, hypr_json, icon_button, read_json, reset_group, run,
+                   run_async, run_chain, run_ok, scale_row, spawn_detached, spin_row, switch_row, write_atomic)
 from .pages_look import apply_pins
+from .store import Store
 
 MONITORS_LUA = HYPR_DIR / "monitors.lua"
 HYPRSUNSET_CONF = HYPR_DIR / "hyprsunset.conf"
@@ -45,6 +46,32 @@ def valid_scales(w, h):
         if abs(lw - round(lw)) < 1e-6 and abs(lh - round(lh)) < 1e-6:
             out.append(round(s, 6))
     return out or [1]
+
+
+INTERNAL_PANEL = re.compile(r"^(eDP|LVDS|DSI)-")
+TRIAL_MARKER_NAME = "display-trial"
+TRIAL_SECONDS = 15
+# Undoes a display trial even if the app dies first: unless the app removes the marker
+# (Keep changes), reloading Hyprland puts the saved settings back.
+WATCHDOG = 'sleep "$2"; if [ -e "$1" ]; then rm -f "$1"; hyprctl reload >/dev/null 2>&1; fi'
+
+
+def monitor_modes(m):
+    """Available modes as 'WxH@R.RR', best first."""
+    modes = []
+    for mode in m.get("availableModes", []):
+        mm = re.match(r"(\d+)x(\d+)@([\d.]+)Hz", mode)
+        if mm:
+            modes.append(f"{mm.group(1)}x{mm.group(2)}@{float(mm.group(3)):.2f}")
+    return sorted(set(modes), key=lambda s: [-float(x) for x in re.split("[x@]", s)])
+
+
+def mode_size(mode):
+    try:
+        w, h = (int(v) for v in mode.split("@")[0].split("x"))
+        return w, h
+    except Exception:
+        return 0, 0
 
 
 def reset_monitor_scale():
@@ -188,31 +215,53 @@ class DisplaysPage(Page):
             x += round(w / e["scale"])
 
     def apply(self):
+        """Try the new settings live; they are only saved when the user keeps them.
+
+        The trial is applied with `hyprctl eval`, so the saved config never holds an
+        unconfirmed setup. A detached watchdog reloads Hyprland (back to the saved settings)
+        after the countdown unless Keep removes its marker, so even a crash of the app
+        mid-countdown is undone."""
         if not any(self.rows[m["name"]]["entry"]["enabled"] for m in self.live):
             self.win.toast("At least one display has to stay on")
             return
         store = self.win.store
-        previous = copy.deepcopy(store.monitors)
-        store.monitors = {k: v for k, v in self.draft.items() if v is not None}
-        store.save_now()
+        new = {k: copy.deepcopy(v) for k, v in self.draft.items() if v is not None}
+        lines = [Store.monitor_lua(name, mon) for name, mon in new.items()]
+        if not lines:
+            return
+        marker = CONFIG_DIR / TRIAL_MARKER_NAME
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        marker.write_text("Display settings on trial; removed when kept.\n")
+        spawn_detached(["sh", "-c", WATCHDOG, "sh", str(marker), str(TRIAL_SECONDS + 3)])
         self.apply_btn.set_sensitive(False)
-        state = {"left": 15, "done": False}
+        state = {"left": TRIAL_SECONDS, "done": False}
 
         def keep():
-            state["done"] = True
-            self.win.toast("Display settings kept")
-
-        def revert():
             if state["done"]:
                 return
             state["done"] = True
-            store.monitors = previous
+            marker.unlink(missing_ok=True)
+            store.monitors = new
             store.save_now()
-            self.win.toast("Display settings reverted")
+            self.win.toast("Display settings kept")
+
+        def revert(message="Display settings reverted"):
+            if state["done"]:
+                return
+            state["done"] = True
+            marker.unlink(missing_ok=True)
+            run_async(["hyprctl", "reload"])
+            self.win.toast(message)
             self.rebuild(delay=800)
 
+        def tried(code, out, err):
+            if code != 0 or not out.strip().startswith("ok"):
+                revert(f"Hyprland refused these display settings: {(out or err).strip()[:120]}")
+                dialog.force_close()
+
+        run_async(["hyprctl", "eval", "\n".join(lines)], tried)
         dialog = confirm(self.win, "Keep these display settings?",
-                         "Reverting in 15 seconds…", keep, label="Keep changes", destructive=False,
+                         f"Reverting in {TRIAL_SECONDS} seconds…", keep, label="Keep changes", destructive=False,
                          on_no=revert)
 
         def tick():
