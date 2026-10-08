@@ -4,6 +4,7 @@ import copy
 import json
 import re
 import shutil
+import time
 from pathlib import Path
 
 from gi.repository import Adw, GLib, Gtk, Pango
@@ -48,7 +49,8 @@ def valid_scales(w, h):
     return out or [1]
 
 
-TRIAL_MARKER_NAME = "display-trial"
+TRIAL_MARKER_NAME = "display-trial"  # + a per-trial suffix, so an old watchdog never ends a new trial
+MONITOR_RULE_FIELDS = {"output", "mode", "position", "scale", "transform", "disabled"}
 TRIAL_SECONDS = 15
 # Undoes a display trial even if the app dies first: unless the app removes the marker
 # (Keep changes), reloading Hyprland puts the saved settings back.
@@ -235,7 +237,7 @@ class DisplaysPage(Page):
         lines = [Store.monitor_lua(name, mon) for name, mon in new.items()]
         if not lines:
             return
-        marker = CONFIG_DIR / TRIAL_MARKER_NAME
+        marker = CONFIG_DIR / f"{TRIAL_MARKER_NAME}-{time.time_ns()}"
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         marker.write_text("Display settings on trial; removed when kept.\n")
         spawn_detached(["sh", "-c", WATCHDOG, "sh", str(marker), str(TRIAL_SECONDS + 3)])
