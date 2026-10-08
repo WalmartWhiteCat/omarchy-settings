@@ -1077,6 +1077,7 @@ class AppsPage(Page):
                 ("Editor", "editor", EDITORS, lambda b: shutil.which(b) or (b == "helix" and shutil.which("hx")))):
             avail = [(label, val) for label, val, probe in options if installed(probe)]
             current = run(["omarchy", "default", kind])
+            current = {"zeditor": "zed"}.get(current, current)  # Omarchy prints the binary name for Zed
             if current and current not in [v for _, v in avail]:
                 avail.append((current, current))
             if not avail:
