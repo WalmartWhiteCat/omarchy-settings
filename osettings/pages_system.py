@@ -720,6 +720,7 @@ class BarPage(Page):
                        if "bar-widget" in p.get("kinds", [])}
         except Exception:
             catalog = {}
+        self.catalog = catalog
         on_bar = set()
         for sec in SECTIONS:
             g = self.widgets[sec]
@@ -772,6 +773,18 @@ class BarPage(Page):
         self.widget_cmd(argv)
 
     def remove(self, wid):
+        kinds = self.catalog.get(wid, {}).get("kinds", ["bar-widget"])
+        if set(kinds) - {"bar-widget"}:
+            # This plugin does more than draw a widget (e.g. omarchy.menu is also the Omarchy
+            # menu itself), so disabling it would break more than the bar: only take it off the bar.
+            data = read_shell()
+            layout = data.get("bar", {}).get("layout", {})
+            for sec in SECTIONS:
+                if isinstance(layout.get(sec), list):
+                    layout[sec] = [e for e in layout[sec] if self.entry_id(e) != wid]
+            write_shell(data)
+            self.populate_widgets()
+            return
         self.widget_cmd(["omarchy", "plugin", "disable", wid])
 
     def add_widget(self):
@@ -779,7 +792,7 @@ class BarPage(Page):
             return
         wid = self.available[self.add_row.get_selected()]
         sec = SECTIONS[self.add_section.get_selected()]
-        run_chain([["omarchy", "plugin", "enable", wid], ["omarchy", "bar", "move", wid, "--section", sec]],
+        run_chain([["omarchy", "plugin", "enable", wid], ["omarchy", "bar", "put", wid, "--section", sec]],
                   lambda f: (self.win.toast(f[0]) if f else self.win.toast("Widget added"), self.populate_widgets()))
 
     def cmd(self, argv):
