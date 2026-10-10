@@ -28,21 +28,21 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 
 | Sidebar | Page (key) | Class, file | How it reaches the desktop | Page tests |
 |---|---|---|---|---|
-| Appearance | Theme (`theme`) | `ThemePage`, pages_look | `omarchy theme set/install`; "keep" pins re-applied by the theme-set hook | none |
+| Appearance | Theme (`theme`) | `ThemePage`, pages_look | `omarchy theme set/install`; "keep" pins re-applied by the theme-set hook | test_page_theme |
 | | Theme Colors (`colors`) | `ColorsPage`, pages_look | edits `colors.toml` (overlay copy for stock themes), then `omarchy theme set` | test_display_colors |
 | | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/` | test_review_fixes |
-| | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | none (Lua: test_render) |
-| | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | none (Lua: test_render) |
+| | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | test_page_windows |
+| | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | test_page_rules |
 | Display | Displays (`displays`) | `DisplaysPage`, pages_system | trial with `hyprctl eval` + watchdog; Keep saves `store.monitors` into the Lua; Restore defaults edits `monitors.lua` | test_review_fixes |
 | | Night Light (`nightlight`) | `NightLightPage`, pages_system | on/off and warmth via `hyprctl hyprsunset temperature`; the schedule is written to `~/.config/hypr/hyprsunset.conf` as hyprsunset profiles (each applies from its `time` until the next: "Turn on at" = `temperature`, "Turn off at" = `identity = true`), then `omarchy restart hyprsunset`; the Lua autostarts hyprsunset while scheduled | test_review_fixes (+ autostart in test_render) |
-| | Fonts and Text (`text`) | `TextPage`, pages_system | `omarchy font set`, `omarchy display text`; interface font via gsettings (pinned by the hook) | none |
-| | Cursor (`cursor`) | `CursorPage`, pages_system | `store.cursor` into the Lua, gsettings, `hyprctl setcursor` | none (Lua: test_render) |
-| Input | Keyboard and Mouse (`input`) | `InputPage`, pages_system | `store.values` (`input:...` options) into the Lua; `omarchy toggle touchpad` | none (Lua: test_render) |
+| | Fonts and Text (`text`) | `TextPage`, pages_system | `omarchy font set`, `omarchy display text`; interface font via gsettings (pinned by the hook) | test_page_text |
+| | Cursor (`cursor`) | `CursorPage`, pages_system | `store.cursor` into the Lua, gsettings, `hyprctl setcursor` | test_page_cursor |
+| Input | Keyboard and Mouse (`input`) | `InputPage`, pages_system | `store.values` (`input:...` options) into the Lua; `omarchy toggle touchpad` | test_page_input |
 | | Keybindings (`keys`) | `KeysPage`, pages_keys | `store.binds` (rebinds, unbinds, custom) into the Lua; parsing in `binds.py` | test_keybinding_fixes, test_review_fixes, test_binds |
 | System | Bar (`bar`) | `BarPage`, pages_system | `omarchy bar ...`, `omarchy plugin enable/disable`; `shell.json` only for removing the menu/media widget | test_review_fixes |
 | | Power and Notifications (`power`) | `PowerPage`, pages_system | `omarchy toggle ...`; idle times in `shell.json`; Do Not Disturb via `omarchy-shell notifications` | test_review_fixes |
-| | Default Apps (`apps`) | `AppsPage`, pages_system | `omarchy default ...` | none |
-| | Autostart (`autostart`) | `AutostartPage`, pages_keys | `store.autostart` into the Lua | none (Lua: test_render) |
+| | Default Apps (`apps`) | `AppsPage`, pages_system | `omarchy default ...` | test_page_apps |
+| | Autostart (`autostart`) | `AutostartPage`, pages_keys | `store.autostart` into the Lua | test_page_autostart |
 | Widgets | Desktop Notes (`notes`) | `NotesPage`, pages_widgets | `~/.config/desktop-notes/config.json`, read live by the widget | test_widgets |
 
 Other test files: `test_store.py` (loading, saving, the set-aside settings.json), `test_render.py`
@@ -50,9 +50,9 @@ Other test files: `test_store.py` (loading, saving, the set-aside settings.json)
 real window and `--page`), `test_install.py` (install.sh). README's "Files it writes" table lists
 every file the app touches and how to undo it.
 
-Pages marked "none" have no tests of the page itself: a bug in how they read a widget or call a
-command won't be caught. When fixing one, add the first test for it in `test_review_fixes.py`
-style (a `Page.__new__` stand-in with a fake win; see `night_page` / `FakeWin` there).
+Every page has page-level tests. The `test_page_*.py` files build the real page (see "Kinds of
+tests"); the older ones in `test_review_fixes.py` use stand-ins. New page tests should use
+`tests/pagekit.py`.
 
 ## Design decisions: don't "fix" these
 - Each part of the generated Lua runs in its own `section()` pcall, so one bad entry can't break
@@ -86,7 +86,7 @@ style (a `Page.__new__` stand-in with a fake win; see `night_page` / `FakeWin` t
 Run from this folder:
 
 ```bash
-./test.sh                          # everything; exit status 0 only if all pass (~530 tests, ~1s)
+./test.sh                          # everything; exit status 0 only if all pass (~590 tests, ~4s)
 ./test.sh -k window                # pytest arguments pass through
 ./test.sh tests/test_store.py
 OSETTINGS_NESTED_HYPRLAND=1 ./test.sh tests/test_nested_hyprland.py   # opt-in, see below
@@ -129,6 +129,19 @@ How the sandbox works (`tests/conftest.py`):
   HOME in tmp_path) uses `REAL_POPEN`.
 
 Kinds of tests:
+- Real pages (`tests/test_page_*.py`, using `tests/pagekit.py`): `open_page(key, settings=None)`
+  writes settings.json if given, opens the real window on that page (nameless SettingsApp, no
+  bus) and returns helpers that use controls by their title: `switch`, `choose` (drop-down, by
+  label), `slide`, `enter` (text field + apply), `number` (spinner), `press` (button row),
+  `click(tooltip, within=row)` (icon button), `row`/`rows`/`has_row`; `save()` runs the pending
+  save; `saved()` is settings.json, `lua()` the generated file; `toasts` collects toasts and busy
+  messages; `page` is looked up each time because pages rebuild themselves. `callbacks(monkeypatch,
+  module)` records each run_async/run_chain's done callback so a test can finish a command as if it
+  exited (pass `(code, out, err)` or a failures list). pagekit answers `hyprctl reload` /
+  `configerrors` as a clean reload, so a save's "after" callbacks run. Commands' stub output comes
+  from `sandbox.run_output[(cmd...)]`; use the real program's output format (read the script in
+  /usr/share/omarchy/bin rather than guess). A GTK grid's selection follows keyboard focus, so
+  check what a page shows (labels, marks) rather than which child is selected.
 - Pages through stand-ins: `Page.__new__` plus fake win/widgets (`tests/test_review_fixes.py`).
 - The real window (`tests/test_window.py`): the real `SettingsApp` with its id cleared
   (`set_application_id(None)`, `NON_UNIQUE`) and no session bus, driving `do_command_line` with a
@@ -140,7 +153,10 @@ Kinds of tests:
   it.
 
 Habits that caught real bugs:
-- See a new test fail on the old code (`git stash -- <file>`, run it, `git stash pop`).
+- See a new test fail on the old code (`git stash -- <file>`, run it, `git stash pop`), or plant
+  bugs one at a time in the code it covers and check each is caught (put the file back after).
+  A plant that changes nothing (e.g. GTK already clamps the value) can't be caught; one that
+  changes behaviour and isn't caught is a gap in the test.
 - Commit only when the test run's exit status is 0, never on grepped or tailed output (a
   pipeline's status is its last command's).
 
