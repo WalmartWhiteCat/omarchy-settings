@@ -10,7 +10,8 @@ alters any of the following, update this file, README.md and OPEN_ITEMS.md **in 
 commit**:
 - what a page does or how it reaches the desktop (the Pages table), or a page's tests;
 - a design decision (add it, or remove one that no longer holds), a safety rule, a known limit;
-- a file or path the app reads or writes (also README's "Files it writes" table);
+- a file or path the app reads or writes (also README's "Files it writes" table, and `backup.sh`'s
+  list if it's personal data);
 - a command it runs, or what an Omarchy command is assumed to print;
 - how to run or write tests (test.sh, conftest, pagekit, the sandbox).
 
@@ -19,6 +20,31 @@ what it can mechanically (every page, class, module, test file and pagekit helpe
 exists, and every page is in the table), so a rename that forgets these notes fails the suite;
 everything else is on you. Fix a wrong statement here as soon as you notice it, even if it's
 unrelated to your change. Mark anything you couldn't verify as unverified rather than guessing.
+
+## Working with the user
+
+This is the user's own daily desktop. What they've asked for, across past sessions:
+- **Bug reports:** they often run a review in another session and paste its findings. Check each
+  claim against the code and Omarchy's scripts first; say which you'd fix, how, and where you
+  disagree (they accept pushback when it's explained). Fix once they say go: a test for each fix
+  that fails on the old code, the full suite before every commit, one commit per fix, then a plain
+  summary that says what wasn't tested live. When they say "in any way you think is best", pick
+  the most robust fix rather than the smallest.
+- **Honesty about mistakes:** say plainly when something went wrong or a claim was wrong. They're
+  fine with rewriting unpushed history to correct a commit.
+- **Live checks:** you can't click or see the screen; when a fix needs eyes on the desktop, tell
+  them exactly what to do and what they should see. Ask before anything that changes their real
+  config, notes, reminders or settings (see "Safety while working"), and back up first.
+- **Notes:** keep these notes true (below) as part of every change.
+
+## Setting up on a fresh machine
+
+README.md, "Moving to a fresh install", has the steps: clone to `~/Work/omarchy-settings` (the
+Desktop Notes widget's notes point here), `./install.sh`, restore the user's data with
+`./backup.sh --restore` (it's never in git), open the app once, then `./test.sh` (it names any
+missing package). After an Omarchy update or reinstall, check the assumptions the app makes about
+Omarchy's commands and files (the Pages table, "Design decisions") against the new
+`/usr/share/omarchy` before trusting them; the tests use stand-ins and won't notice.
 
 ## Layout
 - `omarchy-settings.py`: entry point. `osettings/__init__.py` pins the GI versions.

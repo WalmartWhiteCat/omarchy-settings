@@ -27,6 +27,41 @@ python3 omarchy-settings.py   # or run it directly
 omarchy-settings --page notes # open on a page (install.sh links the command into ~/.local/bin)
 ```
 
+## Moving to a fresh install
+
+Your settings and notes aren't in git. Before reinstalling, save them, and keep the archive
+somewhere that survives (not in the repo):
+
+```bash
+./backup.sh --list          # what it saves: the app's settings, night light schedule, shell.json,
+                            # themes and backgrounds you added, the notes widget's look and notes
+./backup.sh                 # writes ~/omarchy-personal-<date>.tar.gz
+```
+
+On the fresh install:
+
+```bash
+# 1. The app, where its notes expect it (the Desktop Notes widget's notes point here)
+git clone <this repo> ~/Work/omarchy-settings
+cd ~/Work/omarchy-settings && ./install.sh
+
+# 2. The Desktop Notes widget: Omarchy loads plugins from this folder, once enabled
+git clone <the widget's repo> ~/.config/omarchy/plugins/sourced.desktop-notes
+omarchy plugin enable sourced.desktop-notes
+
+# 3. Your data (files already there are kept as <name>.~1~)
+./backup.sh --restore ~/omarchy-personal-<date>.tar.gz
+
+# 4. Open Omarchy Settings once: it regenerates its Hyprland config from settings.json, adds its
+#    line to hyprland.lua and reloads. Then `omarchy restart shell` for the widget.
+```
+
+Things that live outside files come back only when set again: the cursor theme and size, light or
+dark app style, icon theme and interface font (GNOME settings), the monospace font and text size,
+Do Not Disturb, Keep awake, and your default apps. Pick them again in the app. If the new Omarchy
+is newer, compare `~/.config/omarchy/shell.json` with the `shell.json.~1~` it replaced before
+keeping it, and run `./test.sh` in both repos (it names any package to install).
+
 ## How it changes your system
 
 Wherever Omarchy has a command for something (`omarchy theme set`, `omarchy font set`,
