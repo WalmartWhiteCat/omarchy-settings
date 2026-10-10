@@ -20,6 +20,40 @@ Lua config). README.md covers what it does and every file it writes; OPEN_ITEMS.
   and clamps to the same ranges (`NOTES_LIMITS`), so change both together. `window.py`: sidebar, lazy pages,
   Restore all (`RESET_ORDER`), startup checks.
 
+## Pages
+
+Each page is a `Page` subclass with `key, title, icon`; `window.py` `SECTIONS` sets the sidebar
+order, and pages are built only when first shown. The file a page lives in doesn't follow the
+sidebar section: `pages_system.py` holds Display and Input pages too.
+
+| Sidebar | Page (key) | Class, file | How it reaches the desktop | Page tests |
+|---|---|---|---|---|
+| Appearance | Theme (`theme`) | `ThemePage`, pages_look | `omarchy theme set/install`; "keep" pins re-applied by the theme-set hook | none |
+| | Theme Colors (`colors`) | `ColorsPage`, pages_look | edits `colors.toml` (overlay copy for stock themes), then `omarchy theme set` | test_display_colors |
+| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/` | test_review_fixes |
+| | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | none (Lua: test_render) |
+| | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | none (Lua: test_render) |
+| Display | Displays (`displays`) | `DisplaysPage`, pages_system | trial with `hyprctl eval` + watchdog; Keep saves `store.monitors` into the Lua; Restore defaults edits `monitors.lua` | test_review_fixes |
+| | Night Light (`nightlight`) | `NightLightPage`, pages_system | on/off and warmth via `hyprctl hyprsunset temperature`; the schedule is written to `~/.config/hypr/hyprsunset.conf` as hyprsunset profiles (each applies from its `time` until the next: "Turn on at" = `temperature`, "Turn off at" = `identity = true`), then `omarchy restart hyprsunset`; the Lua autostarts hyprsunset while scheduled | test_review_fixes (+ autostart in test_render) |
+| | Fonts and Text (`text`) | `TextPage`, pages_system | `omarchy font set`, `omarchy display text`; interface font via gsettings (pinned by the hook) | none |
+| | Cursor (`cursor`) | `CursorPage`, pages_system | `store.cursor` into the Lua, gsettings, `hyprctl setcursor` | none (Lua: test_render) |
+| Input | Keyboard and Mouse (`input`) | `InputPage`, pages_system | `store.values` (`input:...` options) into the Lua; `omarchy toggle touchpad` | none (Lua: test_render) |
+| | Keybindings (`keys`) | `KeysPage`, pages_keys | `store.binds` (rebinds, unbinds, custom) into the Lua; parsing in `binds.py` | test_keybinding_fixes, test_review_fixes, test_binds |
+| System | Bar (`bar`) | `BarPage`, pages_system | `omarchy bar ...`, `omarchy plugin enable/disable`; `shell.json` only for removing the menu/media widget | test_review_fixes |
+| | Power and Notifications (`power`) | `PowerPage`, pages_system | `omarchy toggle ...`; idle times in `shell.json`; Do Not Disturb via `omarchy-shell notifications` | test_review_fixes |
+| | Default Apps (`apps`) | `AppsPage`, pages_system | `omarchy default ...` | none |
+| | Autostart (`autostart`) | `AutostartPage`, pages_keys | `store.autostart` into the Lua | none (Lua: test_render) |
+| Widgets | Desktop Notes (`notes`) | `NotesPage`, pages_widgets | `~/.config/desktop-notes/config.json`, read live by the widget | test_widgets |
+
+Other test files: `test_store.py` (loading, saving, the set-aside settings.json), `test_render.py`
+(the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_window.py` (the
+real window and `--page`), `test_install.py` (install.sh). README's "Files it writes" table lists
+every file the app touches and how to undo it.
+
+Pages marked "none" have no tests of the page itself: a bug in how they read a widget or call a
+command won't be caught. When fixing one, add the first test for it in `test_review_fixes.py`
+style (a `Page.__new__` stand-in with a fake win; see `night_page` / `FakeWin` there).
+
 ## Design decisions: don't "fix" these
 - Each part of the generated Lua runs in its own `section()` pcall, so one bad entry can't break
   the rest of Hyprland's config.
