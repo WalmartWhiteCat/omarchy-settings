@@ -49,6 +49,9 @@ def _start_broadway():
 
 # WAYLAND_DISPLAY stays set: the opt-in nested Hyprland test runs inside the live session.
 HEADLESS = _start_broadway()
+# No session bus either: nothing under test can reach the user's services, and a GApplication
+# registers as a local instance instead of on the bus.
+os.environ["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/omarchy-settings-tests"
 
 import pytest  # noqa: E402
 from gi.repository import GLib  # noqa: E402

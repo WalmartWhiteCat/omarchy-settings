@@ -19,6 +19,7 @@ SECTIONS = [
     ("Widgets", [NotesPage]),
 ]
 # Theme near the end (slowest, and it picks a wallpaper), then that theme's first stock wallpaper.
+PAGES = {cls.key for _, classes in SECTIONS for cls in classes}
 RESET_ORDER = ["windows", "rules", "displays", "input", "keys", "autostart", "nightlight", "text", "cursor",
                "power", "bar", "notes", "colors", "theme", "background"]
 
@@ -30,7 +31,8 @@ CSS = """
 
 
 class SettingsWindow(Adw.ApplicationWindow):
-    def __init__(self, app):
+    def __init__(self, app, page=None):
+        """Opens on `page` (a page key), else the first page. Only that page is built."""
         super().__init__(application=app, title="Omarchy Settings", default_width=1040, default_height=760)
         provider = Gtk.CssProvider()
         provider.load_from_string(CSS)
@@ -91,7 +93,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         bp.add_setter(self.split, "collapsed", True)
         self.add_breakpoint(bp)
         self.connect("close-request", lambda *_: leave_capture(wait=True) or False)
-        sidebar.select_row(sidebar.get_row_at_index(0))
+        self.select(page if page in self.classes else SECTIONS[0][1][0].key)
         if self.store.load_warning:
             self.toast(self.store.load_warning)
         self.refresh_rebinds()
@@ -207,17 +209,22 @@ class SettingsApp(Adw.Application):
                              "Open on this page, e.g. notes", "KEY")
 
     def do_activate(self):
-        win = self.props.active_window or SettingsWindow(self)
-        win.present()
+        (self.props.active_window or SettingsWindow(self)).present()
 
+    # A first window opens straight on the page asked for, so the slow Theme page isn't built
+    # just to be switched away from.
     def do_command_line(self, command_line):
-        self.activate()
         value = command_line.get_options_dict().lookup_value("page", GLib.VariantType.new("s"))
         key = value.get_string() if value else None
+        note = None
+        if key is not None and key not in PAGES:
+            note, key = f"There's no settings page called “{key}”", None
         win = self.props.active_window
-        if key and win is not None:
-            if key in win.classes:
-                win.select(key)
-            else:
-                win.toast(f"There's no settings page called “{key}”")
+        if win is None:
+            win = SettingsWindow(self, page=key)
+        elif key:
+            win.select(key)
+        win.present()
+        if note:
+            win.toast(note)
         return 0
