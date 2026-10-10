@@ -53,6 +53,8 @@ if taken; then
   echo "Left $COMMAND alone: it isn't a link to this checkout." >&2
 else
   mkdir -p "$(dirname "$COMMAND")"
+  # The link runs the file directly, so it must be executable (a copy may have lost the bit).
+  [[ -x $TARGET ]] || chmod +x "$TARGET"
   ln -sfn "$TARGET" "$COMMAND"
   echo "Installed $COMMAND"
 fi

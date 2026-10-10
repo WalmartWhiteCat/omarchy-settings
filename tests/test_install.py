@@ -76,3 +76,21 @@ def test_uninstall_with_nothing_there(tmp_path):
     r = install(tmp_path, "--uninstall")
     assert r.returncode == 0
     assert f"Removed {command}" not in r.stdout and "Left" not in r.stderr
+
+
+def test_install_makes_the_file_executable(tmp_path):
+    # A copy of the checkout whose omarchy-settings.py lost its exec bit.
+    copy = tmp_path / "checkout"
+    copy.mkdir()
+    for name in ("install.sh", "omarchy-settings.py"):
+        (copy / name).write_bytes((ROOT / name).read_bytes())
+    target = copy / "omarchy-settings.py"
+    target.chmod(0o644)
+    home = tmp_path / "home"
+    env = {**os.environ, "HOME": str(home), "XDG_DATA_HOME": str(home / ".local/share")}
+    p = REAL_POPEN(["bash", str(copy / "install.sh")], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True)
+    p.communicate(timeout=60)
+    assert p.returncode == 0
+    assert os.access(target, os.X_OK)
+    assert (home / ".local/bin/omarchy-settings").samefile(target)
