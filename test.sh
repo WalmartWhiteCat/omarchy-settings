@@ -32,4 +32,8 @@ else
     }
   fi
 fi
+# No .pyc files: Python checks a cached one only by the source's mtime (whole seconds) and size,
+# so an edit of the same length within the same second (e.g. `git stash`, run, `git stash pop`)
+# could keep running the old code.
+export PYTHONDONTWRITEBYTECODE=1
 exec "$py" -m pytest -q "$@"

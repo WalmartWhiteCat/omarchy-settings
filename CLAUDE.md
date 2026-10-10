@@ -40,7 +40,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 | Input | Keyboard and Mouse (`input`) | `InputPage`, pages_system | `store.values` (`input:...` options) into the Lua; `omarchy toggle touchpad` | test_page_input |
 | | Keybindings (`keys`) | `KeysPage`, pages_keys | `store.binds` (rebinds, unbinds, custom) into the Lua; parsing in `binds.py` | test_keybinding_fixes, test_review_fixes, test_binds |
 | System | Bar (`bar`) | `BarPage`, pages_system | `omarchy bar ...`, `omarchy plugin enable/disable`; `shell.json` only for removing the menu/media widget | test_review_fixes |
-| | Power and Notifications (`power`) | `PowerPage`, pages_system | `omarchy toggle ...`; idle times in `shell.json`; Do Not Disturb via `omarchy-shell notifications` | test_review_fixes |
+| | Power and Notifications (`power`) | `PowerPage`, pages_system | `omarchy toggle ...`; idle times written straight to `shell.json` (`idle.screensaver`, `idle.lock`, in seconds; read by Omarchy's idle service, `shell/plugins/services/idle/Service.qml`); Do Not Disturb via `omarchy-shell notifications` | test_page_power, test_review_fixes |
 | | Default Apps (`apps`) | `AppsPage`, pages_system | `omarchy default ...` | test_page_apps |
 | | Autostart (`autostart`) | `AutostartPage`, pages_keys | `store.autostart` into the Lua | test_page_autostart |
 | Widgets | Desktop Notes (`notes`) | `NotesPage`, pages_widgets | `~/.config/desktop-notes/config.json`, read live by the widget | test_widgets |
@@ -50,9 +50,15 @@ Other test files: `test_store.py` (loading, saving, the set-aside settings.json)
 real window and `--page`), `test_install.py` (install.sh). README's "Files it writes" table lists
 every file the app touches and how to undo it.
 
-Every page has page-level tests. The `test_page_*.py` files build the real page (see "Kinds of
-tests"); the older ones in `test_review_fixes.py` use stand-ins. New page tests should use
-`tests/pagekit.py`.
+Every page has page-level tests. The `test_page_*.py` files build the real page and cover the
+page's controls broadly (see "Kinds of tests"); the older ones in `test_review_fixes.py` use
+stand-ins and each covers one past fix, so Displays, Night Light, Background, Bar and Power have
+thinner coverage than the table suggests. New page tests should use `tests/pagekit.py`.
+
+Pages save in two ways: through the Store (`store.values`, `rules`, `cursor`... saved after a
+350ms debounce, so tests call `p.save()`), or by writing a file straight away (`shell.json` on
+Power and Bar, `hyprsunset.conf`, `colors.toml`, the pin hook, the notes widget's
+`config.json`), which tests read directly.
 
 ## Design decisions: don't "fix" these
 - Each part of the generated Lua runs in its own `section()` pcall, so one bad entry can't break
@@ -110,11 +116,15 @@ can't import `gi`.
 How the sandbox works (`tests/conftest.py`):
 - Every module-level path (HOME, the config, state and Hypr folders, `OMARCHY_PATH`, themes...)
   points into `tmp_path`, so the autouse `sandbox` fixture fills it: `tmp_path/home` (HOME, with
-  `.config/hypr`) and `tmp_path/omarchy` already exist when a test starts. Don't assume `tmp_path`
+  only `.config/hypr`) and an empty `tmp_path/omarchy` exist when a test starts. To give a page a
+  file to read, write it at the module's path, making its folder first (e.g.
+  `ps.SHELL_JSON.parent.mkdir(parents=True)`; `~/.config/omarchy` doesn't exist yet). Don't assume `tmp_path`
   is empty. (`tests/test_install.py` uses `tmp_path` itself as the script's HOME, separate from
   the sandbox's `tmp_path/home`.) `run`, `run_async`, `run_chain`, `spawn_detached`, `trash_file` are
   stubbed and record their commands in the `sandbox` fixture (`sandbox.all_cmds()`;
-  `sandbox.run_output` sets stub output). `subprocess.run` / `Popen` are guarded: any real command
+  `sandbox.run_output[tuple(cmd)]` sets a command's output). Unset, `run` returns "", `run_ok`
+  False, `hypr_option` / `hypr_json` None (so `store.current` gives its default) and `gsetting` "";
+  `run_async` / `run_chain` never call their done callback (see `callbacks` below). `subprocess.run` / `Popen` are guarded: any real command
   but `luac` fails the test. Stub any new helper that touches the system.
 - Before GTK loads, conftest starts `gtk4-broadwayd` on a free display (`:90`-`:99`, bound to
   127.0.0.1) and sets `GDK_BACKEND=broadway`, so nothing can draw on the desktop. Display `:N`
@@ -129,11 +139,18 @@ How the sandbox works (`tests/conftest.py`):
   HOME in tmp_path) uses `REAL_POPEN`.
 
 Kinds of tests:
-- Real pages (`tests/test_page_*.py`, using `tests/pagekit.py`): `open_page(key, settings=None)`
-  writes settings.json if given, opens the real window on that page (nameless SettingsApp, no
-  bus) and returns helpers that use controls by their title: `switch`, `choose` (drop-down, by
-  label), `slide`, `enter` (text field + apply), `number` (spinner), `press` (button row),
-  `click(tooltip, within=row)` (icon button), `row`/`rows`/`has_row`; `save()` runs the pending
+- Real pages (`tests/test_page_*.py`, using `tests/pagekit.py`). A test file starts with:
+  ```python
+  from osettings import pages_system as ps       # the page's module, for its paths and helpers
+  from .pagekit import callbacks, needs_display, open_page  # noqa: F401  (open_page is a fixture)
+  pytestmark = needs_display                     # skip without the invisible display
+  ```
+  `p = open_page(key, settings=None)` writes settings.json if given, opens the real window on that
+  page (nameless SettingsApp, no bus) and returns helpers that use controls by their title:
+  `switch(title, on)`, `choose(title, label)` (drop-down), `slide(title, value)`,
+  `enter(title, text)` (text field + apply), `number(title, value)` (spinner), `press(title)`
+  (button row), `click(tooltip, within=row)` (icon button), `row(title, kind=Adw.PreferencesRow)`,
+  `rows(kind)`, `has_row(title)`; `save()` runs the pending
   save; `saved()` is settings.json, `lua()` the generated file; `toasts` collects toasts and busy
   messages; `page` is looked up each time because pages rebuild themselves. `callbacks(monkeypatch,
   module)` records each run_async/run_chain's done callback so a test can finish a command as if it
@@ -156,7 +173,10 @@ Habits that caught real bugs:
 - See a new test fail on the old code (`git stash -- <file>`, run it, `git stash pop`), or plant
   bugs one at a time in the code it covers and check each is caught (put the file back after).
   A plant that changes nothing (e.g. GTK already clamps the value) can't be caught; one that
-  changes behaviour and isn't caught is a gap in the test.
+  changes behaviour and isn't caught is a gap in the test. Run these through `./test.sh`: it sets
+  `PYTHONDONTWRITEBYTECODE=1`, because a cached .pyc is matched only by the source's mtime (whole
+  seconds) and size, so a same-length edit within a second would keep running the old code. If
+  you call pytest directly, set it yourself (and delete stale `__pycache__` folders).
 - Commit only when the test run's exit status is 0, never on grepped or tailed output (a
   pipeline's status is its last command's).
 
