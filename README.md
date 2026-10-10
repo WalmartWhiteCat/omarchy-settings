@@ -72,13 +72,17 @@ config; a failing part shows a notification. Before writing, the app checks the 
 ## Development
 
 ```bash
-python3 -m pytest          # ~500 tests, about a second
+./test.sh                  # ~530 tests, about a second
 # Opt-in: loads the generated config in a nested Hyprland (opens a compositor window in your session)
-OSETTINGS_NESTED_HYPRLAND=1 python3 -m pytest tests/test_nested_hyprland.py
+OSETTINGS_NESTED_HYPRLAND=1 ./test.sh tests/test_nested_hyprland.py
 ```
 
-The tests run in a sandbox: every path points into a temporary folder, and any real command other
-than `luac` makes a test fail. They never touch your live desktop.
+`test.sh` needs `python-gobject`, `gtk4`, `libadwaita` and `lua` (for `luac`), and uses
+`python-pytest` if it's installed, otherwise it sets up a `.venv` with pytest once.
+
+The tests run in a sandbox: every path points into a temporary folder, any real command other
+than `luac` makes a test fail, GTK draws on an invisible display, and there's no session bus.
+They never touch your live desktop. Details are in [CLAUDE.md](CLAUDE.md).
 
 Code layout: `omarchy-settings.py` starts the app; `osettings/` holds `core.py` (helpers, Lua
 escaping, widgets), `store.py` (settings and the Lua generator), `binds.py` (reading Omarchy's
