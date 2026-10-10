@@ -212,7 +212,8 @@ class SettingsApp(Adw.Application):
         (self.props.active_window or SettingsWindow(self)).present()
 
     # A first window opens straight on the page asked for, so the slow Theme page isn't built
-    # just to be switched away from.
+    # just to be switched away from. An open dialog (a shortcut being recorded, Restore all)
+    # keeps its page: it is brought forward and asked to be finished first.
     def do_command_line(self, command_line):
         value = command_line.get_options_dict().lookup_value("page", GLib.VariantType.new("s"))
         key = value.get_string() if value else None
@@ -222,6 +223,8 @@ class SettingsApp(Adw.Application):
         win = self.props.active_window
         if win is None:
             win = SettingsWindow(self, page=key)
+        elif key and win.get_visible_dialog() is not None:
+            note = "Finish or close the open dialog first, then try again"
         elif key:
             win.select(key)
         win.present()

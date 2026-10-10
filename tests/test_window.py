@@ -97,3 +97,20 @@ def test_unknown_page_says_so(app, toasts):
     command_line(app, "notes")
     command_line(app, "nope")
     assert showing(win) == ("notes", "notes") and len(toasts) == 2
+
+
+def test_page_option_waits_for_an_open_dialog(app, toasts):
+    win = command_line(app, "keys")
+    win.confirm_reset_all()
+    spin()
+    dialog = win.get_visible_dialog()
+    assert dialog is not None
+    command_line(app, "notes")
+    assert showing(win) == ("keys", "keys")
+    assert win.get_visible_dialog() is dialog
+    assert "dialog" in toasts[0]
+
+    dialog.force_close()
+    spin()
+    command_line(app, "notes")
+    assert showing(win) == ("notes", "notes") and len(toasts) == 1
