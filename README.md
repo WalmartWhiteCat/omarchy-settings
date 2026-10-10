@@ -41,13 +41,16 @@ somewhere that survives (not in the repo):
 On the fresh install:
 
 ```bash
+# 0. Both repos are private: sign in so git can clone them
+gh auth login && gh auth setup-git
+
 # 1. The app, where its notes expect it (the Desktop Notes widget's notes point here)
-git clone <this repo> ~/Work/omarchy-settings
+git clone https://github.com/WalmartWhiteCat/omarchy-settings.git ~/Work/omarchy-settings
 cd ~/Work/omarchy-settings && ./install.sh
 
-# 2. The Desktop Notes widget: Omarchy loads plugins from this folder, once enabled
-git clone <the widget's repo> ~/.config/omarchy/plugins/sourced.desktop-notes
-omarchy plugin enable sourced.desktop-notes
+# 2. The Desktop Notes widget: Omarchy clones it into ~/.config/omarchy/plugins/sourced.desktop-notes
+#    and enables it (later, `omarchy plugin update` pulls new commits)
+omarchy plugin add https://github.com/WalmartWhiteCat/omarchy-desktop-notes.git --enable
 
 # 3. Your data (files already there are kept as <name>.~1~)
 ./backup.sh --restore ~/omarchy-personal-<date>.tar.gz

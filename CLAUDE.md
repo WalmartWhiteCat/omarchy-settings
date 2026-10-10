@@ -36,11 +36,14 @@ This is the user's own daily desktop. What they've asked for, across past sessio
   them exactly what to do and what they should see. Ask before anything that changes their real
   config, notes, reminders or settings (see "Safety while working"), and back up first.
 - **Notes:** keep these notes true (below) as part of every change.
+- **Pushing:** commits go to `origin` (GitHub, private) only when the user asks.
 
 ## Setting up on a fresh machine
 
-README.md, "Moving to a fresh install", has the steps: clone to `~/Work/omarchy-settings` (the
-Desktop Notes widget's notes point here), `./install.sh`, restore the user's data with
+README.md, "Moving to a fresh install", has the steps: sign in (`gh auth login && gh auth
+setup-git`; both repos are private), clone github.com/WalmartWhiteCat/omarchy-settings to
+`~/Work/omarchy-settings` (the Desktop Notes widget's notes point here), install the widget with
+`omarchy plugin add https://github.com/WalmartWhiteCat/omarchy-desktop-notes.git --enable`, `./install.sh`, restore the user's data with
 `./backup.sh --restore` (it's never in git), open the app once, then `./test.sh` (it names any
 missing package). After an Omarchy update or reinstall, check the assumptions the app makes about
 Omarchy's commands and files (the Pages table, "Design decisions") against the new
