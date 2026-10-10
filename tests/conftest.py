@@ -1,16 +1,57 @@
 """Test harness: every path the app knows about points into tmp_path, and no subprocess
 other than `luac` may run. Nothing here may touch the live desktop."""
 
+import atexit
 import json
 import os
 import pwd
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-import pytest
-from gi.repository import GLib
+
+def _start_broadway():
+    """Give GTK an invisible display (Broadway) before it loads, so a test that builds a real
+    window can't draw on the live desktop. Returns False when gtk4-broadwayd isn't there."""
+    if os.environ.get("OSETTINGS_TEST_BROADWAY"):
+        return True  # this module imported a second time (as tests.conftest): already started
+    daemon = shutil.which("gtk4-broadwayd")
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+    if not daemon:
+        return False
+    for n in range(90, 100):
+        sock = runtime / f"broadway{n + 1}.socket"  # display :N listens on broadway<N+1>
+        if sock.exists():
+            continue
+        proc = subprocess.Popen([daemon, "-a", "127.0.0.1", "-p", str(18000 + n), f":{n}"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(100):
+            if sock.exists() or proc.poll() is not None:
+                break
+            time.sleep(0.02)
+        if not sock.exists():
+            proc.kill()
+            continue
+        def stop(proc=proc, sock=sock):
+            proc.terminate()
+            proc.wait(5)
+            sock.unlink(missing_ok=True)  # broadwayd leaves its socket behind
+
+        atexit.register(stop)
+        os.environ["GDK_BACKEND"] = "broadway"
+        os.environ["BROADWAY_DISPLAY"] = f":{n}"
+        os.environ["OSETTINGS_TEST_BROADWAY"] = "1"
+        return True
+    return False
+
+
+# WAYLAND_DISPLAY stays set: the opt-in nested Hyprland test runs inside the live session.
+HEADLESS = _start_broadway()
+
+import pytest  # noqa: E402
+from gi.repository import GLib  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
