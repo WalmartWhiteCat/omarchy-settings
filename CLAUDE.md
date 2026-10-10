@@ -3,6 +3,23 @@
 GTK4/libadwaita Python app that edits the user's **live** Omarchy desktop (Arch + Hyprland 0.55+,
 Lua config). README.md covers what it does and every file it writes; OPEN_ITEMS.md lists open work.
 
+## Keeping these notes true
+
+These notes are only useful while they match the code. Whenever a change (a bug fix included)
+alters any of the following, update this file, README.md and OPEN_ITEMS.md **in the same
+commit**:
+- what a page does or how it reaches the desktop (the Pages table), or a page's tests;
+- a design decision (add it, or remove one that no longer holds), a safety rule, a known limit;
+- a file or path the app reads or writes (also README's "Files it writes" table);
+- a command it runs, or what an Omarchy command is assumed to print;
+- how to run or write tests (test.sh, conftest, pagekit, the sandbox).
+
+Before committing, reread the sections that touch what you changed. `tests/test_docs.py` checks
+what it can mechanically (every page, class, module, test file and pagekit helper named here
+exists, and every page is in the table), so a rename that forgets these notes fails the suite;
+everything else is on you. Fix a wrong statement here as soon as you notice it, even if it's
+unrelated to your change. Mark anything you couldn't verify as unverified rather than guessing.
+
 ## Layout
 - `omarchy-settings.py`: entry point. `osettings/__init__.py` pins the GI versions.
 - `core.py`: paths, process helpers (`run`, `run_async`, `run_chain`, `spawn_detached`, `trash_file`),
@@ -92,7 +109,7 @@ Power and Bar, `hyprsunset.conf`, `colors.toml`, the pin hook, the notes widget'
 Run from this folder:
 
 ```bash
-./test.sh                          # everything; exit status 0 only if all pass (~590 tests, ~4s)
+./test.sh                          # everything (several hundred tests, a few seconds); exit 0 = all pass
 ./test.sh -k window                # pytest arguments pass through
 ./test.sh tests/test_store.py
 OSETTINGS_NESTED_HYPRLAND=1 ./test.sh tests/test_nested_hyprland.py   # opt-in, see below

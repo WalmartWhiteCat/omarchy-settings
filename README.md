@@ -72,7 +72,7 @@ config; a failing part shows a notification. Before writing, the app checks the 
 ## Development
 
 ```bash
-./test.sh                  # ~590 tests, a few seconds
+./test.sh                  # several hundred tests, a few seconds
 # Opt-in: loads the generated config in a nested Hyprland (opens a compositor window in your session)
 OSETTINGS_NESTED_HYPRLAND=1 ./test.sh tests/test_nested_hyprland.py
 ```
