@@ -388,6 +388,16 @@ def test_night_light_off_and_not_running(sandbox, make_store, monkeypatch):
     assert sandbox.run_chain[-1][1] == ["hyprctl", "hyprsunset", "temperature", "4000"]
 
 
+def test_night_light_schedule_warms_at_start_and_clears_at_end(sandbox, make_store, monkeypatch):
+    # "Turn on at" must be the warm profile and "Turn off at" the neutral one in hyprsunset.conf.
+    page = night_page(make_store, monkeypatch)
+    page.win.store.nightlight.update(schedule=True, start="20:00", end="07:00", temperature=3800)
+    ps.NightLightPage.write_schedule(page)
+    profiles = ps.HYPRSUNSET_CONF.read_text().split("profile {")[1:]
+    by_time = {p.split("time = ")[1].split()[0]: p for p in profiles}
+    assert "temperature = 3800" in by_time["20:00"]
+    assert "identity = true" in by_time["07:00"]
+
 def test_each_trial_has_its_own_marker(make_store, sandbox, monkeypatch):
     st = make_store()
     page, dialogs = make_display_page(st, monkeypatch)
