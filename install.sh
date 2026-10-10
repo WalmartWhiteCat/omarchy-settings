@@ -7,11 +7,23 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCHER="${XDG_DATA_HOME:-$HOME/.local/share}/applications/omarchy-settings.desktop"
 # The Desktop Notes widget's settings button runs `omarchy-settings --page notes`.
 COMMAND="$HOME/.local/bin/omarchy-settings"
+TARGET="$DIR/omarchy-settings.py"
+
+# The command is ours when it links to this checkout, or is a broken link (a
+# moved checkout). Anything else there (a file, a wrapper, another checkout)
+# is left alone.
+ours() { [[ -L $COMMAND ]] && { [[ ! -e $COMMAND ]] || [[ $COMMAND -ef $TARGET ]]; }; }
+taken() { [[ -e $COMMAND || -L $COMMAND ]] && ! ours; }
 
 if [[ ${1:-} == "--uninstall" ]]; then
   rm -f "$LAUNCHER"
-  [[ -L $COMMAND ]] && rm -f "$COMMAND"
-  echo "Removed $LAUNCHER and $COMMAND"
+  echo "Removed $LAUNCHER"
+  if ours; then
+    rm -f "$COMMAND"
+    echo "Removed $COMMAND"
+  elif taken; then
+    echo "Left $COMMAND alone: it isn't a link to this checkout." >&2
+  fi
   exit 0
 fi
 
@@ -37,10 +49,10 @@ if command -v desktop-file-validate >/dev/null; then
 fi
 echo "Installed $LAUNCHER"
 
-if [[ -e $COMMAND && ! -L $COMMAND ]]; then
-  echo "Left $COMMAND alone: it isn't a link this script made." >&2
+if taken; then
+  echo "Left $COMMAND alone: it isn't a link to this checkout." >&2
 else
   mkdir -p "$(dirname "$COMMAND")"
-  ln -sfn "$DIR/omarchy-settings.py" "$COMMAND"
+  ln -sfn "$TARGET" "$COMMAND"
   echo "Installed $COMMAND"
 fi
