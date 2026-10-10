@@ -75,7 +75,10 @@ can't import `gi`.
 
 How the sandbox works (`tests/conftest.py`):
 - Every module-level path (HOME, the config, state and Hypr folders, `OMARCHY_PATH`, themes...)
-  points into `tmp_path`. `run`, `run_async`, `run_chain`, `spawn_detached`, `trash_file` are
+  points into `tmp_path`, so the autouse `sandbox` fixture fills it: `tmp_path/home` (HOME, with
+  `.config/hypr`) and `tmp_path/omarchy` already exist when a test starts. Don't assume `tmp_path`
+  is empty. (`tests/test_install.py` uses `tmp_path` itself as the script's HOME, separate from
+  the sandbox's `tmp_path/home`.) `run`, `run_async`, `run_chain`, `spawn_detached`, `trash_file` are
   stubbed and record their commands in the `sandbox` fixture (`sandbox.all_cmds()`;
   `sandbox.run_output` sets stub output). `subprocess.run` / `Popen` are guarded: any real command
   but `luac` fails the test. Stub any new helper that touches the system.
@@ -107,6 +110,10 @@ Habits that caught real bugs:
 - Commit only when the test run's exit status is 0, never on grepped or tailed output (a
   pipeline's status is its last command's).
 
+Working in a copy (`cp -a`) is fine for experiments; delete its `tests/__pycache__` and
+`.pytest_cache` first (they report the original's paths), and let `./test.sh` make the copy its
+own `.venv` (a copied one has the original's paths baked in).
+
 ## Debugging on the live desktop
 
 - Only one instance runs (`org.omarchy.Settings`): starting it again hands the command line to the
@@ -120,7 +127,9 @@ Habits that caught real bugs:
   `hyprctl reload` the app reads `hyprctl configerrors` and shows the first error as a toast).
   Both are read-only for debugging: don't edit them while the app runs.
 - `hyprctl configerrors` and `luac -p ~/.config/hypr/omarchy_settings.lua` are safe read-only
-  checks. Whether `hyprland.lua` still requires the file: look for
+  checks. `configerrors` reports the whole config as of the last reload, so it's stale if the
+  file changed since; `luac` (Lua 5.5 here) only checks syntax, and Hyprland's own Lua may differ.
+  The only full check without touching the live session is the opt-in nested Hyprland test. Whether `hyprland.lua` still requires the file: look for
   `require("hypr.omarchy_settings")` (commented out = the user switched the app off).
 - The Desktop Notes widget's own notes (tests, data files, log) are in its folder:
   `~/.config/omarchy/plugins/sourced.desktop-notes/CLAUDE.md`.

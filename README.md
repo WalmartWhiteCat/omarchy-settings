@@ -86,6 +86,7 @@ They never touch your live desktop. Details are in [CLAUDE.md](CLAUDE.md).
 
 Code layout: `omarchy-settings.py` starts the app; `osettings/` holds `core.py` (helpers, Lua
 escaping, widgets), `store.py` (settings and the Lua generator), `binds.py` (reading Omarchy's
-keybindings), `pages_look.py`, `pages_system.py`, `pages_keys.py` (the pages) and `window.py`.
+keybindings), `pages_look.py`, `pages_system.py`, `pages_keys.py`, `pages_widgets.py` (the pages)
+and `window.py`.
 
 Open items and things not yet tested on a real desktop are in [OPEN_ITEMS.md](OPEN_ITEMS.md).
