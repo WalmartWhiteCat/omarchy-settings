@@ -125,3 +125,15 @@ def test_install_says_which_app_the_widget_button_opens(tmp_path):
     command.symlink_to(other)
     r = install(tmp_path)
     assert "settings button will still open" in r.stderr
+
+
+def test_uninstall_when_nothing_is_installed_claims_nothing(tmp_path):
+    # Neither the launcher nor the command (nor their folders) exist: no "Removed" for either,
+    # no complaint, and nothing created along the way.
+    launcher, command = paths(tmp_path)
+    r = install(tmp_path, "--uninstall")
+    assert r.returncode == 0, r.stderr
+    assert "Removed" not in r.stdout and "Removed" not in r.stderr
+    assert r.stdout == "" and r.stderr == ""
+    assert not launcher.exists() and not command.exists() and not command.is_symlink()
+    assert not (tmp_path / ".local").exists()  # (tmp_path also holds conftest's sandbox folders)
