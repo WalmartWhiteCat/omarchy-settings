@@ -132,6 +132,16 @@ def open_page(sandbox, monkeypatch):
     """open_page(key, settings=None) -> Opened. settings, if given, is written as settings.json first."""
     toasts = []
     monkeypatch.setattr(window.SettingsWindow, "toast", lambda self, text: toasts.append(text))
+    # A save finishes (and runs its "after" callbacks) once hyprctl reload and configerrors
+    # answer; answer them as a clean reload would. They're still recorded in sandbox.run_async.
+    recorded = store_mod.run_async
+
+    def run_async(cmd, done=None):
+        recorded(cmd, done)
+        if done and cmd[:2] in (["hyprctl", "reload"], ["hyprctl", "configerrors"]):
+            done(0, "no errors" if cmd[1] == "configerrors" else "ok", "")
+
+    monkeypatch.setattr(store_mod, "run_async", run_async)
     monkeypatch.setattr(window.SettingsWindow, "busy", lambda self, text: toasts.append(text))
     apps = []
 
