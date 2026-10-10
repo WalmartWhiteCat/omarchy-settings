@@ -49,7 +49,13 @@ Lua config). README.md covers what it does and every file it writes; OPEN_ITEMS.
   commands other than `luac` fail the test, the Trash and keymap are stubbed. Keep it that way:
   stub any new helper that touches the system.
 - GTK pages are tested through stand-ins (`Page.__new__` plus fake win/widgets), see
-  `tests/test_review_fixes.py`.
+  `tests/test_review_fixes.py`. The real window can be built too (`tests/test_window.py`):
+  conftest runs GTK on an invisible Broadway display and points the session bus at nowhere, so
+  nothing draws on the desktop or reaches the user's services. Never register SettingsApp with
+  its real id in a test.
+- The system Python has no pytest: use a venv made with `--system-site-packages` (so it sees
+  `gi`) and `pip install pytest` in it. `uvx pytest` can't import `gi`.
+- Commit only when the test run's exit status is 0, never on its grepped or tailed output.
 
 ## Conventions
 - One commit per fix, message explaining the bug and the fix, ending with the Co-Authored-By line
