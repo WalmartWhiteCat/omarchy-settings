@@ -94,3 +94,34 @@ def test_install_makes_the_file_executable(tmp_path):
     assert p.returncode == 0
     assert os.access(target, os.X_OK)
     assert (home / ".local/bin/omarchy-settings").samefile(target)
+
+
+def test_uninstall_leaves_a_broken_link_alone(tmp_path):
+    # Another checkout's link, on a drive that isn't mounted right now.
+    _, command = paths(tmp_path)
+    command.parent.mkdir(parents=True)
+    elsewhere = tmp_path / "unmounted/omarchy-settings.py"
+    command.symlink_to(elsewhere)
+    r = install(tmp_path, "--uninstall")
+    assert command.is_symlink() and os.readlink(command) == str(elsewhere)
+    assert "Left" in r.stderr
+
+
+def test_uninstall_leaves_another_checkouts_launcher_alone(tmp_path):
+    launcher, _ = paths(tmp_path)
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text('[Desktop Entry]\nExec=python3 "/elsewhere/omarchy-settings.py"\n')
+    r = install(tmp_path, "--uninstall")
+    assert launcher.exists()
+    assert f"Removed {launcher}" not in r.stdout and "Left" in r.stderr
+
+
+def test_install_says_which_app_the_widget_button_opens(tmp_path):
+    _, command = paths(tmp_path)
+    other = tmp_path / "other-checkout/omarchy-settings.py"
+    other.parent.mkdir()
+    other.write_text("")
+    command.parent.mkdir(parents=True)
+    command.symlink_to(other)
+    r = install(tmp_path)
+    assert "settings button will still open" in r.stderr
