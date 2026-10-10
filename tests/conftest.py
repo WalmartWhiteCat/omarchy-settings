@@ -2,10 +2,13 @@
 other than `luac` may run. Nothing here may touch the live desktop."""
 
 import atexit
+import ctypes
 import json
 import os
 import pwd
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -23,10 +26,11 @@ def _start_broadway():
         return False
     for n in range(90, 100):
         sock = runtime / f"broadway{n + 1}.socket"  # display :N listens on broadway<N+1>
-        if sock.exists():
+        if not _free_socket(sock):
             continue
         proc = subprocess.Popen([daemon, "-a", "127.0.0.1", "-p", str(18000 + n), f":{n}"],
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                preexec_fn=_die_with_parent)
         for _ in range(100):
             if sock.exists() or proc.poll() is not None:
                 break
@@ -47,7 +51,28 @@ def _start_broadway():
     return False
 
 
+def _free_socket(sock):
+    """True when nothing listens on sock. A dead one (left by a run that was killed before its
+    clean-up) is removed so its display number can be used again."""
+    if not sock.exists():
+        return True
+    with socket.socket(socket.AF_UNIX) as probe:
+        try:
+            probe.connect(str(sock))
+            return False
+        except OSError:
+            pass
+    sock.unlink(missing_ok=True)
+    return True
+
+
+def _die_with_parent():
+    # PR_SET_PDEATHSIG: broadwayd gets SIGTERM if the test run dies without cleaning up.
+    ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGTERM)
+
+
 # WAYLAND_DISPLAY stays set: the opt-in nested Hyprland test runs inside the live session.
+# Without an invisible display, tests that build real windows skip (see test_window.py).
 HEADLESS = _start_broadway()
 # No session bus either: nothing under test can reach the user's services, and a GApplication
 # registers as a local instance instead of on the bus.

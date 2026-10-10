@@ -8,6 +8,11 @@ from gi.repository import Gio, GLib
 
 from osettings import window
 
+from .conftest import HEADLESS
+
+# Never on the live desktop: without the invisible display, these don't run.
+pytestmark = pytest.mark.skipif(not HEADLESS, reason="no invisible Broadway display (gtk4-broadwayd)")
+
 
 class FakeOptions:
     def __init__(self, page):
