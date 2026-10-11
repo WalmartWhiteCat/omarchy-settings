@@ -4,7 +4,9 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -138,11 +140,32 @@ def trash_file(path):
         return getattr(e, "message", None) or str(e)
 
 
+# Read once at import: os.umask can only be read by setting it, which isn't thread-safe later.
+_UMASK = os.umask(0o022)
+os.umask(_UMASK)
+
+
 def write_atomic(path, text):
+    """Replace a file's contents in one step: after a crash or a full disk it holds either the old
+    text or the new, never part of it. A symlinked file (e.g. kept in a dotfiles repo) is written
+    through the link rather than replaced by a plain file, and an existing file keeps its mode."""
     path = Path(path)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text)
-    tmp.replace(path)
+    target = path.resolve() if path.is_symlink() else path
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        try:
+            mode = stat.S_IMODE(target.stat().st_mode)
+        except FileNotFoundError:
+            mode = 0o666 & ~_UMASK
+        os.chmod(tmp, mode)
+        os.replace(tmp, target)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def read_json(path, default=None):
