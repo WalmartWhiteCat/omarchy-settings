@@ -8,13 +8,18 @@ from .pagekit import installed_apps, needs_display, open_page, press_key, spin, 
 pytestmark = needs_display
 
 
+def new_shortcut_dialog(p):
+    """Open the new-shortcut dialog; returns it and its "Open an app" drop-down."""
+    p.page.add_custom()
+    dialog = p.win.get_visible_dialog()
+    return dialog, next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+
+
 def test_search_apps_in_the_new_shortcut_dialog(open_page, monkeypatch):
     """Typing in "Open an app"'s search field did nothing: it had no expression to match on."""
     installed_apps(monkeypatch, ("firefox.desktop", "Firefox"), ("nautilus.desktop", "Files"), ("kitty.desktop", "Kitty"))
     p = open_page("keys")
-    p.page.add_custom()
-    dialog = p.win.get_visible_dialog()
-    pick = next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+    dialog, pick = new_shortcut_dialog(p)
     assert p.search(pick, "fi") == ["Firefox", "Files"]
     p.pick_found(pick, "Files")
     assert dialog.command.get_text() == "nautilus.desktop" and dialog.desc.get_text() == "Files"
@@ -27,9 +32,7 @@ def test_typing_in_the_app_search_is_not_recorded_as_a_shortcut(open_page, monke
     calls the dialog's key handler as a key press would.)"""
     installed_apps(monkeypatch, ("firefox.desktop", "Firefox"))
     p = open_page("keys")
-    p.page.add_custom()
-    dialog = p.win.get_visible_dialog()
-    pick = next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+    dialog, pick = new_shortcut_dialog(p)
     pick.activate()
     spin()
     focus = dialog.get_root().get_focus()
@@ -47,13 +50,10 @@ def test_keys_in_the_app_list_are_not_recorded_as_a_shortcut(open_page, monkeypa
     ("R on its own would stop that key working…") instead of going to the list."""
     installed_apps(monkeypatch, ("firefox.desktop", "Firefox"), ("nautilus.desktop", "Files"))
     p = open_page("keys")
-    p.page.add_custom()
-    dialog = p.win.get_visible_dialog()
-    pick = next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+    dialog, pick = new_shortcut_dialog(p)
     pick.activate()
     spin()
-    listview = next(w for w in widgets(pick) if isinstance(w, Gtk.ListView) and w.get_ancestor(Gtk.Popover))
-    assert listview.child_focus(Gtk.DirectionType.TAB_FORWARD)
+    assert p._popup_list(pick).child_focus(Gtk.DirectionType.TAB_FORWARD)
     spin()
     focus = dialog.get_root().get_focus()
     assert not isinstance(focus, Gtk.Text) and focus.get_ancestor(Gtk.Popover)
@@ -68,9 +68,7 @@ def test_f_keys_are_recorded_from_the_app_list(open_page, monkeypatch):
     their own: the list does nothing with F9, so it was lost and the dialog kept waiting."""
     installed_apps(monkeypatch, ("firefox.desktop", "Firefox"))
     p = open_page("keys")
-    p.page.add_custom()
-    dialog = p.win.get_visible_dialog()
-    pick = next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+    dialog, pick = new_shortcut_dialog(p)
     pick.activate()
     spin()
     assert p._popup_list(pick).child_focus(Gtk.DirectionType.TAB_FORWARD)
