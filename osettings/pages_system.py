@@ -238,12 +238,19 @@ class DisplaysPage(Page):
         if not initial and e["scale"] not in scales:
             e["scale"] = scales[row.get_selected()]
 
+    def lit(self, m):
+        """Whether `m` will show anything. A built-in panel is always saved on, but while Omarchy has
+        it off (lid shut with another screen connected) it shows nothing."""
+        if INTERNAL_PANEL.match(m["name"]) and m.get("disabled"):
+            return False
+        return bool(self.rows[m["name"]]["entry"]["enabled"])
+
     def arrange(self):
         x = 0
         for m in self.live:
             r = self.rows[m["name"]]
             e = r["entry"]
-            if not e["enabled"]:
+            if not self.lit(m):
                 continue
             r["x"].set_value(x)
             r["y"].set_value(0)
@@ -259,7 +266,7 @@ class DisplaysPage(Page):
         unconfirmed setup. A detached watchdog reloads Hyprland (back to the saved settings)
         after the countdown unless Keep removes its marker, so even a crash of the app
         mid-countdown is undone."""
-        if not any(self.rows[m["name"]]["entry"]["enabled"] for m in self.live):
+        if not any(self.lit(m) for m in self.live):
             self.win.toast("At least one display has to stay on")
             return
         store = self.win.store

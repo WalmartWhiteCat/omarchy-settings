@@ -474,3 +474,37 @@ def test_trash_failure_keeps_the_file(sandbox, monkeypatch):
     pl.BackgroundPage.remove(page, mine / "a.png")
     assert (mine / "a.png").exists()
     assert "Couldn't move" in page.win.toasts[-1]
+
+
+LID_SHUT = dict(MON, name="eDP-1", width=2880, height=1800, refreshRate=120.0, x=0, y=0, disabled=True,
+                availableModes=["2880x1800@120.00Hz"])
+EXTERNAL = dict(MON, name="DP-1", x=0)
+
+
+def test_a_shut_laptop_panel_does_not_count_as_a_screen_left_on(make_store, sandbox, monkeypatch):
+    """Built-in panels are always saved on, but with the lid shut they show nothing: turning off every
+    external screen then must be refused, not tried (black screens until the revert)."""
+    page, dialogs = make_display_page(make_store(), monkeypatch, live=(LID_SHUT, EXTERNAL))
+    page.rows["DP-1"]["entry"]["enabled"] = False
+    page.draft["DP-1"] = page.rows["DP-1"]["entry"]
+    ps.DisplaysPage.apply(page)
+    assert "At least one display has to stay on" in page.win.toasts
+    assert not dialogs and not [c for c in sandbox.run_async if c[:2] == ["hyprctl", "eval"]]
+
+
+class Spin:
+    def __init__(self):
+        self.value = None
+
+    def set_value(self, v):
+        self.value = v
+
+
+def test_arrange_leaves_no_gap_for_a_shut_laptop_panel(make_store, monkeypatch):
+    second = dict(MON, name="HDMI-A-1", width=1920, height=1080, x=5000)
+    page, _ = make_display_page(make_store(), monkeypatch, live=(LID_SHUT, EXTERNAL, second))
+    for r in page.rows.values():
+        r["x"], r["y"] = Spin(), Spin()
+    ps.DisplaysPage.arrange(page)
+    assert page.rows["DP-1"]["x"].value == 0 and page.rows["HDMI-A-1"]["x"].value == 2560
+    assert page.rows["eDP-1"]["x"].value is None
