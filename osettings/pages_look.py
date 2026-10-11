@@ -11,7 +11,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from .core import (DEFAULT_THEME, HOME, OMARCHY_PATH, STATE, USER_THEMES, Page, clear_group, combo_row, confirm,
                    current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in, load_texture_async,
                    reset_group, rgba_from_hypr, rgba_to_hex, rgba_to_hypr, run, run_async, run_chain, scale_row,
-                   slugify, switch_row, theme_dir, theme_preview, trash_file)
+                   search_combo, slugify, switch_row, theme_dir, theme_preview, trash_file)
 from .store import DEFAULT_ANIMATIONS
 
 PIN_HOOK = HOME / ".config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins"
@@ -707,8 +707,7 @@ class RulesPage(Page):
         self.classes = classes
         existing = {r["class"] for r in self.win.store.rules}
         avail = [c for c in classes if c not in existing]
-        self.pick = Adw.ComboRow(title="Add a rule for an open app",
-                                 model=Gtk.StringList.new(avail or ["No other apps open"]))
+        self.pick = search_combo("Add a rule for an open app", avail or ["No other apps open"])
         self.pick.set_sensitive(bool(avail))
         self.pick.add_suffix(icon_button("list-add-symbolic", "Add rule",
                                          lambda: avail and self.add_rule(avail[self.pick.get_selected()])))

@@ -1,5 +1,5 @@
-"""App Rules page, built for real (see pagekit): adding a rule for an open app or a typed class,
-each rule's settings, removing rules, and removing all."""
+"""App Rules page, built for real (see pagekit): adding a rule for an open app (searching the list)
+or a typed class, each rule's settings, removing rules, and removing all."""
 
 from gi.repository import Adw
 
@@ -46,6 +46,18 @@ def test_add_a_rule_for_an_open_app(open_page, monkeypatch):
     pick.set_selected(1)
     p.click("Add rule")
     assert [r["class"] for r in p.store.rules] == ["firefox", "kitty"]
+
+
+def test_search_the_open_apps(open_page, monkeypatch):
+    """The open-app list had no search field, unlike the app lists on Autostart and Keybindings."""
+    open_apps(monkeypatch, "kitty", "firefox", "Spotify", "org.gnome.Nautilus")
+    p = open_page("rules")
+    pick = p.row("Add a rule for an open app", Adw.ComboRow)
+    assert p.search(pick, "fi") == ["firefox"]
+    assert p.search(pick, "NAUT") == ["org.gnome.Nautilus"]
+    p.pick_found(pick, "org.gnome.Nautilus")
+    p.click("Add rule")
+    assert [r["class"] for r in p.store.rules] == ["org.gnome.Nautilus"]
 
 
 def test_no_open_apps_to_pick(open_page):
