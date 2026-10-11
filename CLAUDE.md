@@ -102,7 +102,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 | Widgets | Desktop Notes (`notes`) | `NotesPage`, pages_widgets | `~/.config/desktop-notes/config.json`, read live by the widget | test_widgets |
 
 Other test files: `test_store.py` (loading, saving, the set-aside settings.json), `test_render.py`
-(the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_files.py` (`write_atomic`), `test_processes.py` (command timeouts), `test_window.py` (the
+(the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_properties.py` (property tests: any settings.json, the Lua escaping read back by real Lua, rule regexes, shortcut spellings), `test_files.py` (`write_atomic`), `test_processes.py` (command timeouts), `test_window.py` (the
 real window and `--page`), `test_install.py` (install.sh). README's "Files it writes" table lists
 every file the app touches and how to undo it.
 
@@ -157,6 +157,7 @@ Run from this folder:
 ./test.sh -k window                # pytest arguments pass through
 ./test.sh tests/test_store.py
 OSETTINGS_NESTED_HYPRLAND=1 ./test.sh tests/test_nested_hyprland.py   # opt-in, see below
+HYPOTHESIS_PROFILE=explore ./test.sh tests/test_properties.py         # property tests, many new inputs
 ```
 
 Tools (Arch packages):
@@ -164,14 +165,15 @@ Tools (Arch packages):
 | Tool | Package | Used for |
 |---|---|---|
 | `python3` with `gi`, GTK 4, libadwaita | `python-gobject`, `gtk4`, `libadwaita` | the app itself |
-| `pytest` | `python-pytest`, or the `.venv` test.sh makes | running the tests |
+| `pytest`, `hypothesis` | `python-pytest`, `python-hypothesis`, or the `.venv` test.sh makes | running the tests (Hypothesis: the property tests) |
 | `luac` (Lua 5.5 here) | `lua` | the only real command tests may run: checks the generated Lua |
+| `lua` | `lua` | only `test_properties.py`, to read escaped values back (see below) |
 | `gtk4-broadwayd` | `gtk4` | invisible display for the real-window tests (they skip without it) |
 | `Hyprland`, `hyprctl` | `hyprland` | only the opt-in nested test |
 
 `test.sh` checks these, naming the package when one is missing. The system Python has no pytest
-unless `python-pytest` is installed; then test.sh makes `.venv/` (git-ignored) once with
-`--system-site-packages`, since `gi` can't come from pip. `uvx pytest` doesn't work: its Python
+or Hypothesis unless `python-pytest` and `python-hypothesis` are installed; without both, test.sh
+makes `.venv/` (git-ignored) once with `--system-site-packages`, since `gi` can't come from pip. `uvx pytest` doesn't work: its Python
 can't import `gi`.
 
 How the sandbox works (`tests/conftest.py`):
@@ -230,6 +232,19 @@ Kinds of tests:
   fake command line, then checking which pages were built (`win.stack`) and what shows. Never
   register SettingsApp with its real id in a test: it could hand the command line to the user's
   running app. `spin()` runs the GLib main loop a little after each step.
+- Property tests (`tests/test_properties.py`, Hypothesis): rules that must hold for every input,
+  checked on generated ones. Whatever settings.json holds (shaped like the real thing, with junk
+  mixed in), the app opens, renders Lua that `luac` accepts and can write, and saving then loading
+  changes nothing more; `lua_str`/`lua_value`/`lua_key`/`lua_table` read back through the real
+  `lua` as the same value; a rule's regex matches its class literally; shortcut spellings agree.
+  The `lua` read-back runs through `REAL_POPEN` (past the guard) and loads the text in an empty
+  environment, so even a broken escape can't reach `os` or `io`. The "repeatable" profile
+  (conftest; the default) gives the same examples every run, so ./test.sh's answer doesn't
+  change; `HYPOTHESIS_PROFILE=explore` tries thousands of new ones and keeps any failure in
+  `.hypothesis/` (git-ignored) to retry first. A failure prints the smallest input that shows it:
+  add that input as an example test with the fix. They found three ways a hand edit stopped
+  every save (2026-10-11). When `_clean` or `render_lua` learns a new part of settings.json, add
+  it to the `settings` strategy.
 - The nested Hyprland test (opt-in) opens a small Hyprland window inside the user's session for a
   few seconds and checks `hyprctl configerrors` for a generated file. Ask the user before running
   it.

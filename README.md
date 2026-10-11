@@ -112,15 +112,18 @@ config; a failing part shows a notification. Before writing, the app checks the 
 
 ```bash
 ./test.sh                  # several hundred tests, a few seconds
+HYPOTHESIS_PROFILE=explore ./test.sh tests/test_properties.py   # property tests on many new inputs
 # Opt-in: loads the generated config in a nested Hyprland (opens a compositor window in your session)
 OSETTINGS_NESTED_HYPRLAND=1 ./test.sh tests/test_nested_hyprland.py
 ```
 
-`test.sh` needs `python-gobject`, `gtk4`, `libadwaita` and `lua` (for `luac`), and uses
-`python-pytest` if it's installed, otherwise it sets up a `.venv` with pytest once.
+`test.sh` needs `python-gobject`, `gtk4`, `libadwaita` and `lua` (for `luac` and `lua`), and uses
+`python-pytest` and `python-hypothesis` if both are installed, otherwise it sets up a `.venv` with
+them once.
 
 The tests run in a sandbox: every path points into a temporary folder, any real command other
-than `luac` makes a test fail, GTK draws on an invisible display, and there's no session bus.
+than `luac` makes a test fail (the property tests also run `lua`, in an empty environment that
+can't reach anything), GTK draws on an invisible display, and there's no session bus.
 They never touch your live desktop. Details are in [CLAUDE.md](CLAUDE.md).
 
 Code layout: `omarchy-settings.py` starts the app; `osettings/` holds `core.py` (helpers, Lua

@@ -86,6 +86,18 @@ sys.path.insert(0, str(ROOT))
 
 from osettings import binds, core, pages_keys, pages_look, pages_system, pages_widgets, store  # noqa: E402
 
+# Property tests (tests/test_properties.py). "repeatable", the default, runs the same examples every
+# time, so ./test.sh gives the same answer; HYPOTHESIS_PROFILE=explore tries many new ones (and
+# keeps failures it finds in .hypothesis/, git-ignored, to try first next time). The sandbox is
+# per test, not per example: each example rewrites the files it uses.
+from hypothesis import HealthCheck, settings as hypothesis_settings  # noqa: E402
+
+_lenient = [HealthCheck.function_scoped_fixture, HealthCheck.too_slow]
+hypothesis_settings.register_profile("repeatable", derandomize=True, database=None, max_examples=150,
+                                     deadline=None, suppress_health_check=_lenient)
+hypothesis_settings.register_profile("explore", max_examples=3000, deadline=None, suppress_health_check=_lenient)
+hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "repeatable"))
+
 # Kept for the opt-in integration test, which needs to start a nested Hyprland.
 REAL_RUN = subprocess.run
 REAL_POPEN = subprocess.Popen
