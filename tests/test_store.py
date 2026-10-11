@@ -503,3 +503,34 @@ def test_rounding_change_refreshes_the_shell_style(make_store, monkeypatch):
 def test_no_shell_refresh_without_a_current_theme(sandbox):
     store_mod.refresh_shell_style()
     assert not sandbox.run_async
+
+
+def test_cleaning_keeps_what_can_be_written_and_counts_what_it_drops(make_store):
+    """The edges of _clean (found by planting bugs in it): a bool is not a number, a scale must be
+    above 0, a speed factor may be below 1, a workspace may be null, and every dropped entry is
+    counted in the warning."""
+    st = make_store({
+        "rules": [{"class": "a", "opacity_active": True}, {"class": "b", "workspace": None},
+                  {"class": "c", "opacity_inactive": 0.5}],
+        "monitors": {"DP-1": {"scale": 0}, "DP-2": {"scale": 0.5}},
+        "cursor": {"size": "big", "theme": 7},
+        "animations": {"factor": 0.5, "windows": 3, "workspaces": ["x"]},
+    })
+    assert [r["class"] for r in st.rules] == ["b", "c"]
+    assert list(st.monitors) == ["DP-2"]
+    assert st.cursor == {}
+    assert st.anim == {"factor": 0.5}
+    assert st.load_warning == "Ignored 6 unreadable entries in settings.json"
+    zero = make_store({"animations": {"factor": 0}})
+    assert zero.anim == {} and zero.load_warning == "Ignored 1 unreadable entry in settings.json"
+    assert make_store({"cursor": {"size": "big"}}).load_warning == "Ignored 1 unreadable entry in settings.json"
+
+
+def test_refresh_rebinds_reports_an_updated_line_as_a_change(make_store):
+    st = make_store()
+    st.binds["rebinds"] = [{"old": "SUPER + RETURN", "new": "SUPER + T", "description": "Terminal",
+                            "line": 'o.bind("SUPER + RETURN", "Terminal", "old-terminal")'}]
+    new_line = 'o.bind("SUPER + RETURN", "Terminal", "new-terminal")'
+    defaults = [{"keys": "SUPER + RETURN", "description": "Terminal", "line": new_line, "rebindable": True}]
+    assert st.refresh_rebinds(defaults) == (True, [])  # so the caller saves it
+    assert st.binds["rebinds"][0]["line"] == new_line

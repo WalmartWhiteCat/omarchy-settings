@@ -119,3 +119,23 @@ def test_page_option_waits_for_an_open_dialog(app, toasts):
     spin()
     command_line(app, "notes")
     assert showing(win) == ("notes", "notes") and len(toasts) == 1
+
+
+def test_a_damaged_settings_file_keeps_the_last_good_lua(app, toasts):
+    """After a damaged settings.json is set aside, the app starts fresh but leaves the generated
+    Lua alone until something is changed: replacing it at startup would wipe the user's settings
+    from Hyprland on the next reload."""
+    from osettings import store as store_mod
+    store_mod.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    store_mod.SETTINGS_FILE.write_text("{not json")
+    store_mod.HYPR_LUA.write_text("-- the last good settings\n")
+    command_line(app, None)
+    assert store_mod.HYPR_LUA.read_text() == "-- the last good settings\n"
+
+
+def test_a_missing_lua_file_is_written_at_startup(app, toasts):
+    from osettings import store as store_mod
+    store_mod.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    store_mod.SETTINGS_FILE.write_text('{"hyprland": {"general:gaps_in": 7}}')
+    command_line(app, None)
+    assert "gaps_in = 7," in store_mod.HYPR_LUA.read_text()
