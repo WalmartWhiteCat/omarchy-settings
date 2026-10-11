@@ -197,3 +197,25 @@ def test_double_right_click_speed_slider_saves_it(open_page):
     p.slide("Double right-click speed", 450)
     pump(0.3)
     assert written()["rightClickWaitMs"] == 450
+
+
+MONITORS = [{"name": "DP-1", "model": "LG ULTRAGEAR+", "x": 0, "y": 0},
+            {"name": "DP-2", "model": "ASUS VG277Q1A", "x": 2560, "y": 0}]
+
+
+def test_monitor_choices_list_connected_monitors_and_a_missing_choice():
+    assert pw.monitor_choices(MONITORS, "") == [
+        ("Main monitor", ""), ("DP-1 (LG ULTRAGEAR+)", "DP-1"), ("DP-2 (ASUS VG277Q1A)", "DP-2")]
+    # Chosen but unplugged: still listed, so the choice isn't lost.
+    assert pw.monitor_choices(MONITORS[:1], "DP-2")[-1] == ("DP-2 (not connected)", "DP-2")
+    assert pw.monitor_choices(None, "") == [("Main monitor", "")]
+
+
+@needs_display
+def test_monitor_drop_down_saves_it(open_page, monkeypatch):
+    monkeypatch.setattr(pw, "hypr_json", lambda *a: MONITORS if a == ("monitors",) else None)
+    p = open_page("notes")
+    p.choose("Monitor", "DP-2 (ASUS VG277Q1A)")
+    assert written()["monitor"] == "DP-2"
+    p.choose("Monitor", "Main monitor")
+    assert written()["monitor"] == ""

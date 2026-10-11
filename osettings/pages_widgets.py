@@ -4,7 +4,7 @@ import json
 
 from gi.repository import Adw, GLib
 
-from .core import HOME, Page, combo_row, read_json, reset_group, scale_row, switch_row, write_atomic
+from .core import HOME, Page, combo_row, hypr_json, read_json, reset_group, scale_row, switch_row, write_atomic
 
 # The widget (~/.config/omarchy/plugins/sourced.desktop-notes) watches this file and applies changes
 # live. It lives outside the plugin folder because saving there reloads the plugin.
@@ -13,7 +13,7 @@ NOTES_PLUGIN = HOME / ".config/omarchy/plugins/sourced.desktop-notes"
 
 NOTES_DEFAULTS = {"opacity": 78, "width": 300, "textScale": 100, "position": "bottom-right",
                   "marginX": 32, "marginY": 32, "title": "Reminders", "alwaysShowBells": False,
-                  "rightClickWaitMs": 200}
+                  "rightClickWaitMs": 200, "monitor": ""}
 # key -> (lowest, highest); the widget clamps to the same ranges for hand-edited files.
 NOTES_LIMITS = {"opacity": (0, 100), "width": (200, 800), "textScale": (70, 200),
                 "marginX": (0, 1000), "marginY": (0, 1000), "rightClickWaitMs": (150, 600)}
@@ -38,9 +38,23 @@ def read_notes_config():
         cfg["position"] = data["position"]
     if isinstance(data.get("title"), str):
         cfg["title"] = data["title"].strip()[:NOTES_TITLE_MAX]
+    if isinstance(data.get("monitor"), str):
+        cfg["monitor"] = data["monitor"].strip()
     if isinstance(data.get("alwaysShowBells"), bool):
         cfg["alwaysShowBells"] = data["alwaysShowBells"]
     return cfg
+
+
+def monitor_choices(monitors, chosen):
+    """(label, value) for the Monitor drop-down: the main monitor (""), each connected one by its
+    output name, and the chosen one if it isn't connected, so opening the page doesn't lose it."""
+    choices = [("Main monitor", "")]
+    for m in monitors if isinstance(monitors, list) else []:
+        if isinstance(m, dict) and m.get("name"):
+            choices.append((f"{m['name']} ({m.get('model') or m.get('description') or 'monitor'})", m["name"]))
+    if chosen and chosen not in [v for _, v in choices]:
+        choices.append((f"{chosen} (not connected)", chosen))
+    return choices
 
 
 def write_notes_config(cfg):
@@ -85,6 +99,11 @@ class NotesPage(Page):
         self.add(g)
 
         g = Adw.PreferencesGroup(title="Location")
+        monitors = monitor_choices(hypr_json("monitors"), self.cfg["monitor"])
+        g.add(combo_row("Monitor", "The main monitor is the one at the top left of the layout. "
+                        "If the chosen one isn't connected, the notes go on the main one",
+                        [l for l, _ in monitors], self.cfg["monitor"],
+                        lambda v: self.set_now("monitor", v), [v for _, v in monitors]))
         g.add(combo_row("Position", "Where on the screen the notes sit", [l for l, _ in POSITIONS],
                         self.cfg["position"], self.set_position, [v for _, v in POSITIONS]))
         self.margin_x = scale_row("Distance from the side", "In pixels", *NOTES_LIMITS["marginX"], 4,
@@ -106,7 +125,7 @@ class NotesPage(Page):
 
         self.add(reset_group(self.win, "Restore default Desktop Notes settings?",
                              "Titled Reminders, 78% background opacity, 300 px wide, normal text size, bottom "
-                             "right, 32 px from the edges, bells shown on hover, 200 ms for a double right click. "
+                             "right of the main monitor, 32 px from the edges, bells shown on hover, 200 ms for a double right click. "
                              "Your notes are kept.", self.reset))
 
     def set(self, key, value):
