@@ -109,8 +109,7 @@ every file the app touches and how to undo it.
 
 Every page has page-level tests. The `test_page_*.py` files build the real page and cover the
 page's controls broadly (see "Kinds of tests"); the older ones in `test_review_fixes.py` use
-stand-ins and each covers one past fix, so Bar and Power have
-thinner coverage than the table suggests. New page tests should use `tests/pagekit.py`.
+stand-ins and each covers one past fix. New page tests should use `tests/pagekit.py`.
 
 Pages save in two ways: through the Store (`store.values`, `rules`, `cursor`... saved after a
 350ms debounce, so tests call `p.save()`), or by writing a file straight away (`shell.json` on
