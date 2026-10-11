@@ -56,20 +56,34 @@ class Opened:
         return self.win.store
 
     @staticmethod
+    def _popover(row):
+        return next(w for w in widgets(row) if isinstance(w, Gtk.Popover))
+
+    @staticmethod
     def _popup_list(row):
         return next(w for w in widgets(row) if isinstance(w, Gtk.ListView) and w.get_ancestor(Gtk.Popover))
 
     def search(self, row, text):
-        """Open a searchable drop-down, type `text` in its search field and return the labels it
-        then lists (after the search field's short typing delay)."""
-        row.activate()
-        spin()
+        """Open a searchable drop-down (if it isn't already), type `text` in its search field and
+        return the labels it then lists."""
+        if not self._popover(row).get_visible():
+            row.activate()  # activating an open drop-down again clears its search a moment later
+            spin()
         entry = next(w for w in widgets(row) if isinstance(w, Gtk.Text) and w.get_ancestor(Gtk.Popover))
-        entry.grab_focus()
+        # The search field filters once its typing delay has passed ("search-changed"). Sleep in
+        # the main loop until it searches for `text`, with a deadline in case it never does.
+        done = []
+        searcher = entry.get_ancestor(Gtk.SearchEntry)
+        handler = searcher.connect("search-changed", lambda e: e.get_text() == text and done.append(True))
+        deadline = GLib.timeout_add(2000, lambda: done.append(False))
         entry.set_text(text)
-        end = GLib.get_monotonic_time() + 400_000
-        while GLib.get_monotonic_time() < end:
-            GLib.MainContext.default().iteration(False)
+        ctx = GLib.MainContext.default()
+        while not done:
+            ctx.iteration(True)
+        searcher.disconnect(handler)
+        if done[0]:
+            GLib.source_remove(deadline)
+        assert done[0], f"the search field never searched for {text!r}"
         model = self._popup_list(row).get_model()
         return [model.get_item(i).get_string() for i in range(model.get_n_items())]
 
