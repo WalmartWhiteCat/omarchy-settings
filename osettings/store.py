@@ -582,5 +582,5 @@ def ensure_required():
         text = text[:anchor.end()] + f"\n{REQUIRE_LINE}" + text[anchor.end():]
     else:
         text += f"\n{REQUIRE_LINE}\n"
-    HYPR_MAIN.write_text(text)
+    write_atomic(HYPR_MAIN, text)  # the user's whole desktop config: never half-written
     return "loaded"

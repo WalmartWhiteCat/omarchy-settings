@@ -267,6 +267,18 @@ def test_ensure_required_inserts_after_looknfeel_once():
     assert len(backups()) == 1
 
 
+def test_ensure_required_rewrites_hyprland_lua_in_one_step(monkeypatch):
+    """hyprland.lua is the user's whole desktop config: a crash or full disk mid-write must leave
+    the old file, never a cut-off one."""
+    store_mod.HYPR_MAIN.write_text('require("hypr.looknfeel")\n')
+    written = []
+    real = store_mod.write_atomic
+    monkeypatch.setattr(store_mod, "write_atomic", lambda p, t: (written.append(p), real(p, t)))
+    store_mod.ensure_required()
+    assert written == [store_mod.HYPR_MAIN]
+    assert store_mod.REQUIRE_LINE in store_mod.HYPR_MAIN.read_text()
+
+
 def test_ensure_required_only_first_looknfeel():
     store_mod.HYPR_MAIN.write_text('require("hypr.looknfeel")\n-- require("hypr.looknfeel")\n')
     store_mod.ensure_required()

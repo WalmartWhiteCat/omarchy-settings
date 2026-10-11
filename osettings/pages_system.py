@@ -118,7 +118,7 @@ def reset_monitor_scale():
     new = "\n".join(out) + "\n"
     if new != text:
         backup(MONITORS_LUA)
-        MONITORS_LUA.write_text(new)
+        write_atomic(MONITORS_LUA, new)
     return True
 
 

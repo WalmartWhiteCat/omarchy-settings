@@ -74,6 +74,16 @@ def test_reset_monitor_scale_restores_template_lines(template):
     assert luac_error(text) is None
 
 
+def test_reset_monitor_scale_rewrites_monitors_lua_in_one_step(template, monkeypatch):
+    pages_system.MONITORS_LUA.write_text(TEMPLATE.replace("omarchy_gdk_scale = 2", "omarchy_gdk_scale = 1"))
+    written = []
+    real = pages_system.write_atomic
+    monkeypatch.setattr(pages_system, "write_atomic", lambda p, t: (written.append(p), real(p, t)))
+    pages_system.reset_monitor_scale()
+    assert written == [pages_system.MONITORS_LUA]
+    assert "local omarchy_gdk_scale = 2\n" in pages_system.MONITORS_LUA.read_text()
+
+
 def test_reset_monitor_scale_noop_when_already_default(template):
     pages_system.MONITORS_LUA.write_text(TEMPLATE)
     assert pages_system.reset_monitor_scale() is True
