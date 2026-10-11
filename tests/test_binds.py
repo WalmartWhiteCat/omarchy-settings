@@ -324,3 +324,77 @@ def test_binding_files_omarchy_adds_or_renames_are_read(sandbox):
     assert binds.group_title("tiling") == "Windows and workspaces"
     assert binds.group_title("screen-capture") == "Screen capture"
     assert binds.group_title("other") == "Other"
+
+
+# ------------------------------------------------------------------ gaps a mutation pass found
+
+
+def test_a_table_key_doesnt_excuse_code_after_it(sandbox):
+    write_binds(sandbox, utilities='o.bind("SUPER + Z", "Zap", { omarchy = "terminal", run = os.getenv("X") })\n'
+                                   'o.bind("SUPER + Y", "Yes", { omarchy = "terminal", direction = "l" })\n')
+    out = by_keys(binds.parse_default_binds())
+    assert not out["SUPER + Z"]["rebindable"]
+    assert out["SUPER + Y"]["rebindable"]
+
+
+def test_nested_ifs_make_one_guard(sandbox):
+    write_binds(sandbox, utilities="""\
+        -- if commented_out then
+        if o.has_command("voxtype") then
+          if o.has_command("wtype") then
+            o.bind("F9", "Dictation", "voxtype")
+          end
+        end
+        o.bind("SUPER + D", "Plain", "x")
+        """)
+    out = by_keys(binds.parse_default_binds())
+    assert out["F9"]["guard"] == '(o.has_command("voxtype")) and (o.has_command("wtype"))'
+    assert out["F9"]["rebindable"]
+    assert out["SUPER + D"]["guard"] is None  # the commented-out `if` opened nothing
+
+
+def test_an_unreadable_binding_file_doesnt_hide_the_others(sandbox):
+    write_binds(sandbox, applications='o.bind("SUPER + A", "A", "a")\n', zzz='o.bind("SUPER + B", "B", "b")\n')
+    bad = sandbox.omarchy / "default/hypr/bindings/applications.lua"
+    bad.chmod(0)
+    try:
+        assert [e["keys"] for e in binds.parse_default_binds()] == ["SUPER + B"]
+    finally:
+        bad.chmod(0o644)
+
+
+def test_turned_off_keys_missing_from_the_lists_are_listed_but_not_movable(sandbox):
+    out = binds.parse_default_binds(disabled_info={"SUPER + W": "Close window"})
+    assert out == [{"keys": "SUPER + W", "description": "Close window", "line": None, "guard": None,
+                    "rebindable": False, "group": "other"}]
+
+
+def test_live_binds_give_the_spelling_hyprland_unbinds_by(monkeypatch):
+    monkeypatch.setattr(binds, "hypr_json", lambda *a: [
+        {"modmask": 64, "key": "", "keycode": 10, "description": "Workspace 1"},
+        {"modmask": 65, "key": "Return", "keycode": 0, "description": "Terminal"},
+        {"modmask": 0, "key": "F9", "keycode": 0, "description": "Dictation"},
+        {"modmask": 64, "key": "mouse:272", "mouse": True, "description": "Move"},
+        {"modmask": 64, "key": "Q", "keycode": 0, "description": ""},
+        {"modmask": 64, "key": "", "keycode": 0, "description": "Nothing"},
+        "not a bind"])
+    assert binds.live_bind_spellings() == {"Workspace 1": ["SUPER + code:10"], "Terminal": ["SUPER + SHIFT + Return"],
+                                           "Dictation": ["F9"]}
+
+
+def test_pretty_reads_keycodes_without_a_keymap(monkeypatch):
+    monkeypatch.setattr(binds, "keycode_name", lambda code: None)
+    assert binds.pretty("SUPER + code:10") == "Super + 1"
+    assert binds.pretty("SUPER + code:19") == "Super + 0"
+    assert binds.pretty("SUPER + code:20") == "Super + Code:20"
+    assert binds.pretty("SUPER + code:9") == "Super + Code:9"
+
+
+def test_switches_and_odd_spellings():
+    assert binds.pretty("switch:on:Lid Switch") == "Lid Switch"
+    assert binds.key_count("switch:on:Lid Switch") == 1
+    assert binds.key_count("SUPER + J + K") == 2
+    assert binds.canonical("SUPER J K") == "SUPER + K"  # one key: the last
+    assert binds.canonical("  switch:on:Lid  ") == "switch:on:Lid"
+    assert binds.has_modifier("SHIFT + J") and not binds.has_modifier("J")
+    assert not binds.bare_ok("SHIFT + J") and binds.bare_ok("SHIFT + F12") and binds.bare_ok("CTRL + J")
