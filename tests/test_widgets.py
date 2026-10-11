@@ -181,3 +181,19 @@ def test_always_show_bells_switch_saves_it(open_page):
     assert written()["alwaysShowBells"] is True
     p.switch("Always show reminder bells", False)
     assert written()["alwaysShowBells"] is False
+
+
+def test_double_right_click_speed_is_kept_in_range():
+    pw.NOTES_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    pw.NOTES_CONFIG.write_text(json.dumps({"rightClickWaitMs": 5000}))
+    assert pw.read_notes_config()["rightClickWaitMs"] == 600
+    pw.NOTES_CONFIG.write_text(json.dumps({}))
+    assert pw.read_notes_config()["rightClickWaitMs"] == 200
+
+
+@needs_display
+def test_double_right_click_speed_slider_saves_it(open_page):
+    p = open_page("notes")
+    p.slide("Double right-click speed", 450)
+    pump(0.3)
+    assert written()["rightClickWaitMs"] == 450

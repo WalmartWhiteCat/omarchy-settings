@@ -12,10 +12,11 @@ NOTES_CONFIG = HOME / ".config/desktop-notes/config.json"
 NOTES_PLUGIN = HOME / ".config/omarchy/plugins/sourced.desktop-notes"
 
 NOTES_DEFAULTS = {"opacity": 78, "width": 300, "textScale": 100, "position": "bottom-right",
-                  "marginX": 32, "marginY": 32, "title": "Reminders", "alwaysShowBells": False}
+                  "marginX": 32, "marginY": 32, "title": "Reminders", "alwaysShowBells": False,
+                  "rightClickWaitMs": 200}
 # key -> (lowest, highest); the widget clamps to the same ranges for hand-edited files.
 NOTES_LIMITS = {"opacity": (0, 100), "width": (200, 800), "textScale": (70, 200),
-                "marginX": (0, 1000), "marginY": (0, 1000)}
+                "marginX": (0, 1000), "marginY": (0, 1000), "rightClickWaitMs": (150, 600)}
 # The card's heading is kept to one short line; empty hides it. The widget's titleMax matches.
 NOTES_TITLE_MAX = 60
 POSITIONS = [("Top left", "top-left"), ("Top", "top"), ("Top right", "top-right"),
@@ -95,9 +96,18 @@ class NotesPage(Page):
         self.update_margins()
         self.add(g)
 
+        g = Adw.PreferencesGroup(title="Clicks", description="Left click ticks a note, right click edits it "
+                                 "and a double right click deletes it (the same for a collection's name).")
+        g.add(scale_row("Double right-click speed", "How long a right click waits for a second one before "
+                        "editing, in milliseconds. Raise it if double right clicks open the editor "
+                        "instead of deleting", *NOTES_LIMITS["rightClickWaitMs"], 10,
+                        self.cfg["rightClickWaitMs"], 0, lambda v: self.set("rightClickWaitMs", v)))
+        self.add(g)
+
         self.add(reset_group(self.win, "Restore default Desktop Notes settings?",
                              "Titled Reminders, 78% background opacity, 300 px wide, normal text size, bottom "
-                             "right, 32 px from the edges, bells shown on hover. Your notes are kept.", self.reset))
+                             "right, 32 px from the edges, bells shown on hover, 200 ms for a double right click. "
+                             "Your notes are kept.", self.reset))
 
     def set(self, key, value):
         self.cfg[key] = value
