@@ -242,7 +242,7 @@ def rgba_from_hypr(value, fallback="#888888"):
     """'ffa9a4e8 0deg' / 'rgba(33ccffee)' / '#A9A4E8' -> Gdk.RGBA of the first color."""
     c = Gdk.RGBA()
     s = str(value or "").strip()
-    if s.startswith("rgba(") or s.startswith("rgb("):
+    if (s.startswith("rgba(") or s.startswith("rgb(")) and ")" in s:
         hexs = s[s.index("(") + 1:s.index(")")]
         if len(hexs) in (6, 8) and all(ch in "0123456789abcdefABCDEF" for ch in hexs):
             a = int(hexs[6:8], 16) / 255 if len(hexs) == 8 else 1

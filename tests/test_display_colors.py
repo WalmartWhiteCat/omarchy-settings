@@ -319,3 +319,18 @@ def test_undo_all_color_edits_covers_every_theme(sandbox):
     assert not overlay.exists()
     assert (mine / "colors.toml").read_text() == 'accent = "#123456"\n'
     assert (untouched / "colors.toml").read_text() == 'accent = "#ABCDEF"\n'
+
+
+@pytest.mark.parametrize("value", ["rgba(ffffff", "rgb(", "rgba()", "rgba(zzzzzz)", "", None, "garbage 45deg"])
+def test_unreadable_colors_fall_back_instead_of_raising(value):
+    """A damaged color (hand-edited settings.json, an odd hyprctl answer) used to raise while the
+    Windows page was being built, so the page never showed."""
+    from osettings import core
+    c = core.rgba_from_hypr(value, fallback="#123456")
+    assert core.rgba_to_hex(c) == "#123456"
+
+
+def test_readable_colors_still_parse():
+    from osettings import core
+    assert core.rgba_to_hypr(core.rgba_from_hypr("rgba(33ccff80)")) == "rgba(33ccff80)"
+    assert core.rgba_to_hex(core.rgba_from_hypr("ffa9a4e8 0deg")) == "#A9A4E8"
