@@ -1,9 +1,9 @@
 """Keybindings page, built for real (see pagekit). Most Keybindings tests use stand-ins: see
 test_keybinding_fixes, test_review_fixes and test_binds."""
 
-from gi.repository import Adw
+from gi.repository import Adw, Gdk, Gtk
 
-from .pagekit import installed_apps, needs_display, open_page, widgets  # noqa: F401
+from .pagekit import installed_apps, needs_display, open_page, spin, widgets  # noqa: F401
 
 pytestmark = needs_display
 
@@ -18,3 +18,24 @@ def test_search_apps_in_the_new_shortcut_dialog(open_page, monkeypatch):
     assert p.search(pick, "fi") == ["Firefox", "Files"]
     p.pick_found(pick, "Files")
     assert dialog.command.get_text() == "nautilus.desktop" and dialog.desc.get_text() == "Files"
+
+
+def test_typing_in_the_app_search_is_not_recorded_as_a_shortcut(open_page, monkeypatch):
+    """The dialog records every key it sees first (a capture-phase controller) unless a text field
+    has the focus. Opening "Open an app" must put the focus in its search field, so letters typed
+    there reach it instead of becoming the shortcut. (GTK can't fake real key presses, so this
+    calls the dialog's key handler as a key press would.)"""
+    installed_apps(monkeypatch, ("firefox.desktop", "Firefox"))
+    p = open_page("keys")
+    p.page.add_custom()
+    dialog = p.win.get_visible_dialog()
+    pick = next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+    pick.activate()
+    spin()
+    focus = dialog.get_root().get_focus()
+    assert isinstance(focus, Gtk.Text) and focus.get_ancestor(Gtk.Popover) and focus.is_ancestor(pick)
+    keycode_f = 41  # evdev 33 + 8
+    assert dialog.on_key(None, Gdk.KEY_f, keycode_f, 0) is False
+    assert dialog.shown.get_label() == "Waiting for keys…"
+    # Held Ctrl still records a shortcut, even from the search field.
+    assert dialog.on_key(None, Gdk.KEY_f, keycode_f, Gdk.ModifierType.CONTROL_MASK) is True
