@@ -165,18 +165,23 @@ class DisplaysPage(Page):
                              "and puts automatic scaling back.", self.reset))
 
     def entry(self, m):
+        # A screen that is off can report a 0x0 mode; use its best real mode instead.
+        if m.get("width", 0) > 0 and m.get("height", 0) > 0:
+            mode = f"{m['width']}x{m['height']}@{m['refreshRate']:.2f}"
+        else:
+            mode = (monitor_modes(m) or ["preferred"])[0]
+        # Built-in panels are always saved on; Omarchy's lid handling switches them off.
+        on = True if INTERNAL_PANEL.match(m["name"]) else not m.get("disabled", False)
+        live = {"enabled": on, "mode": mode,
+                "x": m.get("x", 0), "y": m.get("y", 0), "scale": round(m.get("scale") or 1, 6),
+                "transform": m.get("transform", 0)}
         e = self.draft.get(m["name"])
         if e is None:
-            # A screen that is off can report a 0x0 mode; use its best real mode instead.
-            if m.get("width", 0) > 0 and m.get("height", 0) > 0:
-                mode = f"{m['width']}x{m['height']}@{m['refreshRate']:.2f}"
-            else:
-                mode = (monitor_modes(m) or ["preferred"])[0]
-            # Built-in panels are always saved on; Omarchy's lid handling switches them off.
-            on = True if INTERNAL_PANEL.match(m["name"]) else not m.get("disabled", False)
-            e = {"enabled": on, "mode": mode,
-                 "x": m.get("x", 0), "y": m.get("y", 0), "scale": round(m.get("scale") or 1, 6),
-                 "transform": m.get("transform", 0)}
+            return live
+        # A saved entry may lack fields (settings.json allows it, and monitor_lua fills them in);
+        # take them from what the screen runs now. A missing one left the whole page blank.
+        for key, value in live.items():
+            e.setdefault(key, value)
         return e
 
     def monitor_group(self, m):

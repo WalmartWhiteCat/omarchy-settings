@@ -275,3 +275,14 @@ def test_restore_defaults(sandbox, open_page, screens):
     assert text.startswith(template) and 'output = ""' in text  # scale lines back, the rest kept
     assert list(ps.MONITORS_LUA.parent.glob("monitors.lua.bak*"))  # backed up first
 
+
+def test_a_saved_screen_missing_fields_still_shows(open_page, screens):
+    """settings.json may hold a screen with only some fields (_clean allows it, and the Lua fills
+    in the rest); the page takes the others from what the screen runs. One missing field left the
+    whole page blank (a KeyError while building it)."""
+    screens(LG)
+    p = open_page("displays", {"monitors": {"DP-1": {"mode": "1920x1080@60.00", "scale": 2}}})
+    lg = screen(p, "DP-1")
+    assert picked(lg["Resolution and refresh rate"]) == "1920 × 1080  ·  60 Hz"
+    assert picked(lg["Scale"]) == "200%"
+    assert lg["Enabled"].get_active() and lg["Position X"].get_value() == 0
