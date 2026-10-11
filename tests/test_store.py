@@ -192,6 +192,21 @@ def test_refresh_rebinds_updates_and_drops():
     assert st.refresh_rebinds(defaults) == (False, [])
 
 
+def test_refresh_rebinds_keeps_everything_when_omarchys_files_cant_be_read():
+    """No bindings read at all means the files are missing or moved, not that every changed
+    shortcut's binding is gone: dropping them then lost the user's changes for good."""
+    st = store_mod.Store(lambda e: None)
+    rb = {"old": "SUPER + A", "new": "SUPER + F1", "line": 'o.bind("SUPER + A", "Apps", "x")',
+          "description": "Apps"}
+    st.binds["rebinds"] = [dict(rb)]
+    st.binds["disabled"] = ["SUPER + B"]
+    st.binds["disabled_info"] = {"SUPER + B": "Browser"}
+    other = [{"keys": "SUPER + O", "description": "Other", "line": None, "rebindable": False}]
+    for defaults in ([], other):
+        assert st.refresh_rebinds(defaults) == (False, [])
+        assert st.binds["rebinds"] == [rb] and st.binds["disabled"] == ["SUPER + B"]
+
+
 def test_save_writes_lua_requires_and_reloads(make_store, sandbox):
     store_mod.HYPR_MAIN.write_text('require("hypr.looknfeel")\n')
     st = make_store()

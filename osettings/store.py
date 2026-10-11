@@ -265,8 +265,13 @@ class Store:
         A rebind stores a copy of Omarchy's line; after an update that copy can be stale. Lines
         are refreshed from the binding at the same original key with the same description. A
         rebind whose binding is gone (or can no longer be rebound safely) is dropped. Returns
-        (changed, dropped_descriptions)."""
+        (changed, dropped_descriptions).
+
+        With no bindings read from Omarchy's files at all, nothing is changed: that means the files
+        couldn't be read (moved, renamed, mid-update), and dropping then would lose every change."""
         by_key = {(b["keys"], b["description"]): b for b in defaults if b["line"]}
+        if not by_key:
+            return False, []
         kept, dropped, changed = [], [], False
         for rb in self.binds["rebinds"]:
             b = by_key.get((rb.get("old"), rb.get("description", "")))
