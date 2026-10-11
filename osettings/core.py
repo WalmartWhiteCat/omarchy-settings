@@ -373,8 +373,10 @@ def combo_row(title, subtitle, labels, selected, on_change, values=None):
 
 def search_combo(title, labels, subtitle=""):
     """A drop-down over `labels` with a search field. The expression tells it what to match typed
-    text against; without one (as before) the search field filtered nothing."""
-    return Adw.ComboRow(title=title, subtitle=subtitle, model=Gtk.StringList.new(labels), enable_search=True,
+    text against; without one (as before) the search field filtered nothing. It matches anywhere in
+    a label: libadwaita's default only matches the start, so "code" missed "Visual Studio Code"."""
+    return Adw.ComboRow(title=title, subtitle=subtitle or "", model=Gtk.StringList.new(labels),
+                        enable_search=True, search_match_mode=Gtk.StringFilterMatchMode.SUBSTRING,
                         expression=Gtk.PropertyExpression.new(Gtk.StringObject, None, "string"))
 
 

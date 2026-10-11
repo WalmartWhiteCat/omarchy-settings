@@ -113,3 +113,14 @@ def test_search_the_app_list(open_page, monkeypatch):
     p.click("Add")
     p.save()
     assert p.saved()["autostart"] == [{"command": "kitty.desktop", "launch": True, "enabled": True}]
+
+
+def test_search_matches_anywhere_in_a_name(open_page, monkeypatch):
+    """The search only matched the start of a name (libadwaita's default), so "code" didn't find
+    Visual Studio Code."""
+    apps(monkeypatch, ("code.desktop", "Visual Studio Code"), ("firefox.desktop", "Firefox"),
+         ("writer.desktop", "LibreOffice Writer"))
+    p = open_page("autostart")
+    pick = p.row("Add an app", Adw.ComboRow)
+    assert p.search(pick, "code") == ["Visual Studio Code"]
+    assert p.search(pick, "FOX") == ["Firefox"]
