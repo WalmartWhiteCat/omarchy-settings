@@ -1,12 +1,16 @@
 """Desktop Notes page: the widget's config file, and opening the app on a page."""
 
 import json
+import re
+
+import pytest
 
 from gi.repository import GLib
 
 from osettings import pages_widgets as pw
 from osettings import window
 
+from .conftest import REAL_HOME
 from .pagekit import needs_display, open_page  # noqa: F401  (open_page is a fixture)
 
 
@@ -209,6 +213,7 @@ def test_monitor_choices_list_connected_monitors_and_a_missing_choice():
     # Chosen but unplugged: still listed, so the choice isn't lost.
     assert pw.monitor_choices(MONITORS[:1], "DP-2")[-1] == ("DP-2 (not connected)", "DP-2")
     assert pw.monitor_choices(None, "") == [("Main monitor", "")]
+    assert len(pw.monitor_choices(MONITORS, "DP-1")) == 3  # chosen and connected: listed once
 
 
 @needs_display
@@ -219,3 +224,51 @@ def test_monitor_drop_down_saves_it(open_page, monkeypatch):
     assert written()["monitor"] == "DP-2"
     p.choose("Monitor", "Main monitor")
     assert written()["monitor"] == ""
+
+
+def _qml_object(qml, name):
+    """A `readonly property var name: (...)` / `property int name: n` from DesktopNotes.qml, as Python."""
+    m = re.search(rf"property \w+ {name}: (\(\{{.*?\}}\)|\[.*?\]|\d+)\s*$", qml, re.S | re.M)
+    assert m, f"{name} not found in DesktopNotes.qml"
+    text = m.group(1).strip("()")
+    return json.loads(re.sub(r"(\w+):", r'"\1":', text))
+
+
+WIDGET_QML = REAL_HOME / ".config/omarchy/plugins/sourced.desktop-notes/DesktopNotes.qml"
+
+
+@pytest.mark.skipif(not WIDGET_QML.exists(), reason="the Desktop Notes widget isn't installed")
+def test_defaults_and_limits_match_the_widget():
+    """The widget clamps hand-edited values to the same ranges and falls back to the same defaults;
+    the two are kept in step by hand (CLAUDE.md), so check them. Reads the installed widget only."""
+    qml = WIDGET_QML.read_text()
+    assert _qml_object(qml, "defaults") == pw.NOTES_DEFAULTS
+    assert {k: tuple(v) for k, v in _qml_object(qml, "limits").items()} == pw.NOTES_LIMITS
+    assert _qml_object(qml, "titleMax") == pw.NOTES_TITLE_MAX
+    assert _qml_object(qml, "positions") == [v for _, v in pw.POSITIONS]
+
+
+def test_monitor_is_read_trimmed():
+    pw.NOTES_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    pw.NOTES_CONFIG.write_text(json.dumps({"monitor": "  DP-2 \n"}))
+    assert pw.read_notes_config()["monitor"] == "DP-2"
+
+
+def test_monitor_choices_skip_entries_without_a_name():
+    assert pw.monitor_choices([{"model": "x"}, "DP-3", {"name": "", "model": "y"}], "") == [("Main monitor", "")]
+    assert pw.monitor_choices([{"name": "DP-1"}], "") == [("Main monitor", ""), ("DP-1 (monitor)", "DP-1")]
+    assert pw.monitor_choices([{"name": "DP-1", "description": "LG"}], "")[-1] == ("DP-1 (LG)", "DP-1")
+
+
+@needs_display
+def test_page_says_when_the_widget_isnt_installed(open_page):
+    from gi.repository import Adw
+    from .pagekit import widgets
+
+    def notices(p):
+        return [g.get_description() for g in widgets(p.page)
+                if isinstance(g, Adw.PreferencesGroup) and "isn't installed" in (g.get_description() or "")]
+
+    assert notices(open_page("notes"))  # the sandbox has no plugin folder
+    pw.NOTES_PLUGIN.mkdir(parents=True)
+    assert not notices(open_page("notes"))

@@ -70,7 +70,8 @@ Omarchy's commands and files (the Pages table, "Design decisions") against the n
   writes the Desktop Notes widget's `~/.config/desktop-notes/config.json`; the widget itself is a shell
   plugin in `~/.config/omarchy/plugins/sourced.desktop-notes` (not in this repo) that watches that file
   and clamps to the same ranges (`NOTES_LIMITS`, and `NOTES_TITLE_MAX` for the card's title), so
-  change both together. Text, switch and drop-down settings (title, always show bells, monitor) are saved at once
+  change both together (`tests/test_widgets.py` compares them, and the defaults and positions,
+  with the installed widget's QML; it skips when the widget isn't installed). Text, switch and drop-down settings (title, always show bells, monitor) are saved at once
   (`set_now`); the Monitor list comes from `hyprctl monitors` (`monitor_choices`). Its sliders write the
   latest values at most every 100ms while they move (a timer that isn't restarted per step), so the
   card follows them live; a debounce restarted per step wrote only once a slider stopped. `window.py`: sidebar, lazy pages,
