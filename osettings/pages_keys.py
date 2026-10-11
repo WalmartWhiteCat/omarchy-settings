@@ -4,8 +4,8 @@ import re
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from .binds import (bare_ok, group_title, keys_from_event, normalize, parse_default_binds, pretty,
-                    siblings)
+from .binds import (bare_ok, canonical, group_title, key_count, keys_from_event, normalize, parse_default_binds,
+                    pretty, siblings)
 from .core import (HYPR_DIR, OMARCHY_PATH, Page, clear_group, group_add, icon_button, keycap, reset_group, run,
                    run_async, spawn_detached)
 from .store import CAPTURE_SUBMAP, require_state
@@ -25,6 +25,19 @@ def leave_capture(wait=False):
     """Leave the recording submap. `wait` blocks until done, for when the app is about to quit."""
     cmd = ["hyprctl", "dispatch", 'hl.dsp.submap("reset")']
     run(cmd) if wait else run_async(cmd)
+
+
+def typed_keys(text):
+    """A typed combination spelled the way recorded ones are: 'super shift r' -> 'SUPER + SHIFT + R'.
+    Text without exactly one key comes back as typed, for set_keys to refuse (canonical would drop
+    the extra keys)."""
+    if key_count(text) != 1:
+        return text.strip()
+    keys = canonical(text)
+    mods, _, key = keys.rpartition(" + ")
+    if len(key) == 1:
+        keys = f"{mods} + {key.upper()}" if mods else key.upper()
+    return keys
 
 
 # Keys that move focus or confirm in a dialog; without a modifier they are never recorded.
@@ -63,7 +76,7 @@ class ShortcutDialog(Adw.Dialog):
         self.conflict.add_css_class("warning")
         g.add(self.conflict)
         self.typed = Adw.EntryRow(title="Or type it (e.g. SUPER + SHIFT + R)", text=keys, show_apply_button=True)
-        self.typed.connect("apply", lambda r: self.set_keys(r.get_text().strip()))
+        self.typed.connect("apply", lambda r: self.set_keys(typed_keys(r.get_text())))
         g.add(self.typed)
         page_.add(g)
 
@@ -136,6 +149,10 @@ class ShortcutDialog(Adw.Dialog):
     def set_keys(self, keys):
         if not keys:
             return
+        if key_count(keys) != 1:
+            self.conflict.set_label(f"“{keys}” needs exactly one key besides Super, Shift, Ctrl and Alt, "
+                                    "e.g. SUPER + SHIFT + R.")
+            return
         if not bare_ok(keys):
             self.conflict.set_label(f"{pretty(keys)} on its own would stop that key working in every app. "
                                     "Hold Super, Ctrl or Alt with it.")
@@ -155,7 +172,7 @@ class ShortcutDialog(Adw.Dialog):
 
     def finish(self):
         if self.typed.get_text().strip() and self.typed.get_text().strip() != self.keys and not self.keys:
-            self.set_keys(self.typed.get_text().strip())
+            self.set_keys(typed_keys(self.typed.get_text()))
         if not self.keys:
             return
         result = {"keys": self.keys}

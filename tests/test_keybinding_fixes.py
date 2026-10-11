@@ -217,3 +217,23 @@ def test_require_state(sandbox):
     assert store_mod.require_state() == "missing"  # required but never generated
     store_mod.HYPR_LUA.write_text("-- generated\n")
     assert store_mod.require_state() == "loaded"
+
+
+@pytest.mark.parametrize("typed", ["SUPER", "CTRL + ", "SUPER + SHIFT", "SUPER + A B", "+"])
+def test_recorder_refuses_a_shortcut_without_exactly_one_key(sandbox, make_store, typed):
+    """Typed text with no key (or two) was saved as a binding Hyprland rejects at every reload."""
+    page = keys_page(sandbox, make_store)
+    d = recorder(page)
+    pk.ShortcutDialog.set_keys(d, pk.typed_keys(typed))
+    assert d.keys == "" and "one key" in d.conflict.text
+
+
+@pytest.mark.parametrize("typed, keys", [
+    ("super shift r", "SUPER + SHIFT + R"), ("SUPER+code:10", "SUPER + code:10"),
+    ("ctrl + alt + Delete", "CTRL + ALT + Delete"), ("SUPER + Return", "SUPER + Return"),
+])
+def test_typed_shortcuts_are_spelled_like_recorded_ones(sandbox, make_store, typed, keys):
+    page = keys_page(sandbox, make_store)
+    d = recorder(page)
+    pk.ShortcutDialog.set_keys(d, pk.typed_keys(typed))
+    assert d.keys == keys

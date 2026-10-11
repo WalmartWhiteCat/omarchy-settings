@@ -92,6 +92,13 @@ def canonical(keys):
     return " + ".join([m for m in MOD_ORDER if m in mods] + rest[-1:])
 
 
+def key_count(keys):
+    """How many non-modifier keys a combination names (a shortcut needs exactly one)."""
+    if keys.strip().lower().startswith("switch:"):
+        return 1
+    return sum(1 for p in re.split(r"[+\s]+", keys.strip()) if p and p.upper() not in MOD_ALIASES)
+
+
 def has_modifier(keys):
     return bool(normalize(keys)[0])
 
