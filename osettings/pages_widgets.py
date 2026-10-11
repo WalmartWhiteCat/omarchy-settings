@@ -87,10 +87,11 @@ class NotesPage(Page):
 
     def set(self, key, value):
         self.cfg[key] = value
-        # Sliders fire on every step; write once they settle so the widget isn't reloaded per pixel.
-        if self._pending:
-            GLib.source_remove(self._pending)
-        self._pending = GLib.timeout_add(150, self.flush)
+        # Sliders fire on every step: write the latest values at most every 100ms, so the widget
+        # follows a slider as it moves without reading the file per pixel. (Restarting the timer on
+        # each step, as before 2026-10-11, held every write back until the slider stopped.)
+        if not self._pending:
+            self._pending = GLib.timeout_add(100, self.flush)
 
     def flush(self):
         self._pending = None

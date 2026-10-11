@@ -80,7 +80,7 @@ def test_position_change_saves_at_once_and_greys_out_unused_distances():
     assert page.margin_x.sensitive is True and page.margin_y.sensitive is True
 
 
-def test_slider_changes_are_debounced_into_one_write():
+def test_slider_changes_close_together_are_one_write():
     page = bare_page()
     page.set("width", 310)
     page.set("width", 320)
@@ -89,6 +89,31 @@ def test_slider_changes_are_debounced_into_one_write():
     GLib.source_remove(page._pending)
     page.flush()
     assert json.loads(pw.NOTES_CONFIG.read_text())["width"] == 320
+    assert page._pending is None
+
+
+def pump(seconds):
+    """Runs GLib's main loop for a while, so timers fire as in the app."""
+    import time
+    ctx, end = GLib.MainContext.default(), time.monotonic() + seconds
+    while time.monotonic() < end:
+        while ctx.pending():
+            ctx.iteration(False)
+        time.sleep(0.005)
+
+
+def test_slider_held_moving_writes_as_it_goes(monkeypatch):
+    # A slider dragged steadily changes every few ms; the widget follows each
+    # write, so they must come while it moves, not only once it stops.
+    page = bare_page()
+    written = []
+    monkeypatch.setattr(pw, "write_notes_config", lambda cfg: written.append(cfg["width"]))
+    for width in range(300, 400, 10):
+        page.set("width", width)
+        pump(0.04)
+    assert len(written) >= 3, written
+    pump(0.3)
+    assert written[-1] == 390
     assert page._pending is None
 
 
