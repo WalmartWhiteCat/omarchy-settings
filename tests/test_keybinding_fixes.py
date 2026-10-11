@@ -275,3 +275,18 @@ def test_save_stays_open_when_the_typed_text_is_refused(sandbox, make_store):
     d = finishing(keys_page(sandbox, make_store), typed="SUPER", keys="SUPER + T")
     pk.ShortcutDialog.finish(d)
     assert d.done == [] and not d.closed and "one key" in d.conflict.text
+
+
+def test_turning_on_a_shortcut_redraws_the_shortcut_it_turned_off(sandbox, make_store):
+    """take_over turns off whatever else is on the key; without a redraw the page still showed that
+    shortcut as on."""
+    page = keys_page(sandbox, make_store)
+    page.rebuilt = []
+    page.rebuild = lambda delay=0: page.rebuilt.append(1)
+    c = {"keys": "F9", "command": "foot", "description": "Terminal", "launch": True, "enabled": False}
+    page.win.store.binds["custom"].append(c)
+    pk.KeysPage.toggle_custom(page, c, True)
+    assert c["enabled"] and "F9" in page.win.store.binds["disabled"]
+    assert page.rebuilt == [1]
+    pk.KeysPage.toggle_custom(page, c, False)  # nothing else changes: no redraw needed
+    assert page.rebuilt == [1]

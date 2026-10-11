@@ -421,10 +421,13 @@ class KeysPage(Page):
         ShortcutDialog(self, "Edit shortcut", done, keys=c["keys"], custom=c, ignore=c).present(self.win)
 
     def toggle_custom(self, c, on):
-        if on:
-            self.take_over(c["keys"], c)
+        took = self.take_over(c["keys"], c) if on else None
         c["enabled"] = on
         self.win.store.schedule_save()
+        if took:
+            # The shortcut that lost its key now shows as off. Rebuilt from the main loop, not from
+            # inside the switch's own signal, which the rebuild would remove.
+            self.rebuild(delay=1)
 
     def delete_custom(self, c):
         self.win.store.binds["custom"].remove(c)
