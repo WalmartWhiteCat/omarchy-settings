@@ -68,3 +68,28 @@ def test_restore_defaults(sandbox, open_page, monkeypatch):
     saved = p.saved()
     assert saved["cursor"] == {} and saved["hyprland"] == {"input:repeat_rate": 50}
     assert finished == [True] and "Cursor restored" in p.toasts and p.page is not old
+
+
+def test_a_size_not_in_the_list_is_shown_as_it_is(sandbox, open_page, monkeypatch):
+    """A size of 20 (from gsettings or settings.json) used to show as 16, the first entry."""
+    monkeypatch.setattr(ps, "gsetting", lambda key, *a, **k: "20" if key == "cursor-size" else "")
+    p = open_page("cursor")
+    row = p.row("Cursor size")
+    assert row.get_model().get_string(row.get_selected()) == "20"
+
+
+def test_choosing_a_theme_keeps_the_current_size(sandbox, open_page, monkeypatch):
+    """With no size chosen in the app, picking a theme set the live cursor to 24 even when the
+    system size (gsettings) was bigger."""
+    cursor_theme(sandbox, "Test-Cursor")
+    monkeypatch.setattr(ps, "gsetting", lambda key, *a, **k: "48" if key == "cursor-size" else "")
+    p = open_page("cursor")
+    p.choose("Cursor theme", "Test-Cursor")
+    assert sandbox.run_async[-1] == ["hyprctl", "setcursor", "Test-Cursor", "48"]
+
+
+def test_choosing_a_size_keeps_the_current_theme(sandbox, open_page, monkeypatch):
+    monkeypatch.setattr(ps, "gsetting", lambda key, *a, **k: "Bibata" if key == "cursor-theme" else "")
+    p = open_page("cursor")
+    p.choose("Cursor size", "32")
+    assert sandbox.run_async[-1] == ["hyprctl", "setcursor", "Bibata", "32"]

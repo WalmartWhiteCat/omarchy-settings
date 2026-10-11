@@ -754,11 +754,8 @@ class CursorPage(Page):
                          for p in base.glob("*/cursors")})
         cur_theme = store.cursor.get("theme") or gsetting("cursor-theme")
         g.add(combo_row("Cursor theme", None, themes, cur_theme, lambda v: self.set_cursor(theme=v)))
-        sizes = [16, 24, 32, 48, 64]
-        try:
-            cur_size = int(store.cursor.get("size") or gsetting("cursor-size") or 24)
-        except ValueError:
-            cur_size = 24
+        cur_size = self.current_size()
+        sizes = sorted({16, 24, 32, 48, 64, cur_size})  # an in-between size shows as itself
         g.add(combo_row("Cursor size", None, [str(s) for s in sizes], cur_size, lambda v: self.set_cursor(size=v),
                         sizes))
         g.add(scale_row("Hide when idle", "Seconds without movement (0 = never)", 0, 30, 1,
@@ -773,6 +770,13 @@ class CursorPage(Page):
         self.add(reset_group(self.win, "Restore the default cursor?",
                              "Cursor theme, size and hiding go back to the system defaults.", self.reset))
 
+    def current_size(self):
+        """The size chosen here, else the system's (gsettings), else 24."""
+        try:
+            return int(self.win.store.cursor.get("size") or gsetting("cursor-size") or 24)
+        except ValueError:
+            return 24
+
     def set_cursor(self, theme=None, size=None):
         store = self.win.store
         if theme:
@@ -781,7 +785,8 @@ class CursorPage(Page):
         if size:
             store.cursor["size"] = size
             run_async(["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", str(size)])
-        run_async(["hyprctl", "setcursor", store.cursor.get("theme") or "default", str(store.cursor.get("size") or 24)])
+        live_theme = store.cursor.get("theme") or gsetting("cursor-theme") or "default"
+        run_async(["hyprctl", "setcursor", live_theme, str(self.current_size())])
         store.schedule_save()
 
     def reset(self, done=None):
