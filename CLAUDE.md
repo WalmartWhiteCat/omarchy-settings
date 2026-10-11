@@ -103,7 +103,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 | Widgets | Desktop Notes (`notes`) | `NotesPage`, pages_widgets | `~/.config/desktop-notes/config.json`, read live by the widget | test_widgets |
 
 Other test files: `test_store.py` (loading, saving, the set-aside settings.json), `test_render.py`
-(the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_properties.py` (property tests: any settings.json, the Lua escaping read back by real Lua, rule regexes, shortcut spellings), `test_files.py` (`write_atomic`), `test_processes.py` (command timeouts), `test_window.py` (the
+(the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_properties.py` (property tests: any settings.json, the Lua escaping read back by real Lua, rule regexes, shortcut spellings), `test_files.py` (`write_atomic`), `test_processes.py` (command timeouts), `test_core_helpers.py` (the real `run`, `run_ok`, `run_chain`, `spawn_detached`, `hypr_option`, `trash_file`, which the sandbox stubs elsewhere, with subprocess faked underneath; colors, images, theme previews), `test_window.py` (the
 real window and `--page`), `test_install.py` (install.sh). README's "Files it writes" table lists
 every file the app touches and how to undo it.
 
@@ -253,6 +253,10 @@ Kinds of tests:
 Habits that caught real bugs:
 - See a new test fail on the old code (`git stash -- <file>`, run it, `git stash pop`), or plant
   bugs one at a time in the code it covers and check each is caught (put the file back after).
+  Done for all of store.py, core.py, binds.py and pages_widgets.py on 2026-10-11 (every
+  comparison, constant, `and`/`or`, `not` and return value changed in turn, in a copy, with the
+  suite run against each): what still goes uncaught is styling, docstrings, GLib callback return
+  values, thread flags, and equivalent forms.
   A plant that changes nothing (e.g. GTK already clamps the value) can't be caught; one that
   changes behaviour and isn't caught is a gap in the test. Run these through `./test.sh`: it sets
   `PYTHONDONTWRITEBYTECODE=1`, because a cached .pyc is matched only by the source's mtime (whole

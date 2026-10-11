@@ -291,3 +291,19 @@ def test_shortcut_spellings_agree(sandbox, k):
         assert binds.normalize(c) == binds.normalize(k), (k, c)
     binds.pretty(k)
     binds.bare_ok(k)
+
+
+# --------------------------------------------------------------------------- colors
+
+hex_digits = st.text("0123456789abcdefABCDEF", min_size=2, max_size=2)
+
+
+@given(st.lists(hex_digits, min_size=4, max_size=4).map("".join))
+def test_hyprland_colors_survive_a_round_trip(sandbox, rrggbbaa):
+    """A color read from Hyprland and written back is the same color, in either spelling it uses
+    (rgba(RRGGBBAA), or AARRGGBB at the start of a gradient)."""
+    from osettings.core import rgba_from_hypr, rgba_to_hypr
+    want = f"rgba({rrggbbaa.lower()})"
+    assert rgba_to_hypr(rgba_from_hypr(f"rgba({rrggbbaa})")) == want
+    aarrggbb = rrggbbaa[6:] + rrggbbaa[:6]
+    assert rgba_to_hypr(rgba_from_hypr(f"{aarrggbb} 45deg")) == want

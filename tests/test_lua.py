@@ -128,3 +128,15 @@ def test_lua_table_value_marker_renders_inline():
 def test_lua_key_never_emits_invalid_identifier(k):
     # Python identifiers are a superset of Lua's: keywords and non-ASCII letters are not valid Lua names.
     lua_eval("{ " + lua_key(k) + " = 1 }")
+
+
+# Lua 5.4/5.5's reserved words, listed here rather than taken from core, so a word missing
+# from core's own list fails.
+RESERVED = ["and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in",
+            "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"]
+
+
+@pytest.mark.parametrize("word", RESERVED)
+def test_lua_key_quotes_every_reserved_word(word):
+    assert lua_key(word) == f'["{word}"]'
+    lua_eval("{ " + lua_key(word) + " = 1 }")
