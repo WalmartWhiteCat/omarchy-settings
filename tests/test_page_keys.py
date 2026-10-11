@@ -3,7 +3,7 @@ test_keybinding_fixes, test_review_fixes and test_binds."""
 
 from gi.repository import Adw, Gdk, Gtk
 
-from .pagekit import installed_apps, needs_display, open_page, spin, widgets  # noqa: F401
+from .pagekit import installed_apps, needs_display, open_page, press_key, spin, widgets  # noqa: F401
 
 pytestmark = needs_display
 
@@ -34,11 +34,11 @@ def test_typing_in_the_app_search_is_not_recorded_as_a_shortcut(open_page, monke
     spin()
     focus = dialog.get_root().get_focus()
     assert isinstance(focus, Gtk.Text) and focus.get_ancestor(Gtk.Popover) and focus.is_ancestor(pick)
-    keycode_f = 41  # evdev 33 + 8
-    assert dialog.on_key(None, Gdk.KEY_f, keycode_f, 0) is False
-    assert dialog.shown.get_label() == "Waiting for keys…"
+    assert press_key(dialog, Gdk.KEY_f) is False
+    assert dialog.shown.get_label() == "Waiting for keys…" and dialog.conflict.get_label() == ""
     # Held Ctrl still records a shortcut, even from the search field.
-    assert dialog.on_key(None, Gdk.KEY_f, keycode_f, Gdk.ModifierType.CONTROL_MASK) is True
+    assert press_key(dialog, Gdk.KEY_f, Gdk.ModifierType.CONTROL_MASK) is True
+    assert dialog.keys == "CTRL + F"
 
 
 def test_keys_in_the_app_list_are_not_recorded_as_a_shortcut(open_page, monkeypatch):
@@ -57,7 +57,7 @@ def test_keys_in_the_app_list_are_not_recorded_as_a_shortcut(open_page, monkeypa
     spin()
     focus = dialog.get_root().get_focus()
     assert not isinstance(focus, Gtk.Text) and focus.get_ancestor(Gtk.Popover)
-    keycode_r = 35  # evdev 27 + 8
-    assert dialog.on_key(None, Gdk.KEY_r, keycode_r, 0) is False
-    assert dialog.shown.get_label() == "Waiting for keys…"
-    assert dialog.on_key(None, Gdk.KEY_r, keycode_r, Gdk.ModifierType.CONTROL_MASK) is True
+    assert press_key(dialog, Gdk.KEY_r) is False
+    assert dialog.shown.get_label() == "Waiting for keys…" and dialog.conflict.get_label() == ""
+    assert press_key(dialog, Gdk.KEY_r, Gdk.ModifierType.CONTROL_MASK) is True
+    assert dialog.keys == "CTRL + R"

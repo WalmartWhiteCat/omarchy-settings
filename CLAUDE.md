@@ -215,7 +215,9 @@ Kinds of tests:
   messages; `page` is looked up each time because pages rebuild themselves. `callbacks(monkeypatch,
   module)` records each run_async/run_chain's done callback so a test can finish a command as if it
   exited (pass `(code, out, err)` or a failures list). `installed_apps(monkeypatch, (id, name)...)` makes
-  the app pickers (Autostart, the shortcut dialog) list those apps instead of the machine's. pagekit answers `hyprctl reload` /
+  the app pickers (Autostart, the shortcut dialog) list those apps instead of the machine's. `press_key(dialog, keyval, state=0)` calls the shortcut dialog's key
+  handler as that key's press would (GTK can't fake real presses; the keycode comes from the display's
+  keymap, which on Broadway isn't evdev + 8). pagekit answers `hyprctl reload` /
   `configerrors` as a clean reload, so a save's "after" callbacks run. Commands' stub output comes
   from `sandbox.run_output[(cmd...)]`; use the real program's output format (read the script in
   /usr/share/omarchy/bin rather than guess). A GTK grid's selection follows keyboard focus, so

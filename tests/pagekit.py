@@ -9,7 +9,7 @@ reach the user's running Omarchy Settings."""
 import json
 
 import pytest
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from osettings import pages_keys
 from osettings import store as store_mod
@@ -33,6 +33,15 @@ def widgets(root):
         yield child
         yield from widgets(child)
         child = child.get_next_sibling()
+
+
+def press_key(dialog, keyval, state=0):
+    """Call the shortcut dialog's key handler as a press of `keyval` would; returns whether the
+    dialog took the key. GTK can't fake real key presses. The keycode comes from the display's
+    keymap: on Broadway it isn't the evdev code + 8 (there, 35 is "#", not R)."""
+    ok, keys = Gdk.Display.get_default().map_keyval(keyval)
+    assert ok, Gdk.keyval_name(keyval)
+    return dialog.on_key(None, keyval, keys[0].keycode, state)
 
 
 class Opened:
