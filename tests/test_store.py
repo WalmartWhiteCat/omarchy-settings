@@ -424,6 +424,7 @@ def test_saves_are_atomic(make_store, monkeypatch):
     {"hyprland": {"decoration:rounding": None}},
     {"hyprland": {"general:col": 1}},
     {"hyprland": {"my-plugin:x": 0}},
+    {"rules": [{"class": "foot", "workspace": "²"}]},
 ])
 def test_bad_entries_never_stop_the_app(make_store, data):
     st = make_store(data)

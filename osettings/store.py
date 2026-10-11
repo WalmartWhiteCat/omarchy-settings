@@ -530,7 +530,8 @@ class Store:
         ws = r.get("workspace")
         if ws:
             # A number from the app, or a name Hyprland understands (e.g. "special:steam").
-            fields["workspace"] = str(int(ws)) if isinstance(ws, (int, float)) or str(ws).isdigit() else str(ws)
+            # isdecimal, not isdigit: "²" is a digit that int() can't read.
+            fields["workspace"] = str(int(ws)) if isinstance(ws, (int, float)) or str(ws).isdecimal() else str(ws)
         if len(fields) == 1:
             return None
         return f"hl.window_rule({lua_value(fields)})"
