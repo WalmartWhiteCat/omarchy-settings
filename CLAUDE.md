@@ -86,7 +86,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 |---|---|---|---|---|
 | Appearance | Theme (`theme`) | `ThemePage`, pages_look | `omarchy theme set/install`; "keep" pins re-applied by the theme-set hook | test_page_theme |
 | | Theme Colors (`colors`) | `ColorsPage`, pages_look | edits `colors.toml` (overlay copy for stock themes), then `omarchy theme set` | test_display_colors |
-| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/` | test_review_fixes |
+| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/` | test_page_background, test_review_fixes |
 | | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | test_page_windows |
 | | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | test_page_rules |
 | Display | Displays (`displays`) | `DisplaysPage`, pages_system | trial with `hyprctl eval` + watchdog; Keep saves `store.monitors` into the Lua; Restore defaults edits `monitors.lua` | test_page_displays, test_review_fixes |
@@ -108,7 +108,7 @@ every file the app touches and how to undo it.
 
 Every page has page-level tests. The `test_page_*.py` files build the real page and cover the
 page's controls broadly (see "Kinds of tests"); the older ones in `test_review_fixes.py` use
-stand-ins and each covers one past fix, so Background, Bar and Power have
+stand-ins and each covers one past fix, so Bar and Power have
 thinner coverage than the table suggests. New page tests should use `tests/pagekit.py`.
 
 Pages save in two ways: through the Store (`store.values`, `rules`, `cursor`... saved after a
