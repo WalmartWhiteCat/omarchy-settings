@@ -13,7 +13,7 @@ NOTES_PLUGIN = HOME / ".config/omarchy/plugins/sourced.desktop-notes"
 
 NOTES_DEFAULTS = {"opacity": 78, "width": 300, "textScale": 100, "position": "bottom-right",
                   "marginX": 32, "marginY": 32, "title": "Reminders", "alwaysShowBells": False,
-                  "rightClickWaitMs": 200, "monitor": ""}
+                  "rightClickWaitMs": 200, "monitor": "", "outline": False}
 # key -> (lowest, highest); the widget clamps to the same ranges for hand-edited files.
 NOTES_LIMITS = {"opacity": (0, 100), "width": (200, 800), "textScale": (70, 200),
                 "marginX": (0, 1000), "marginY": (0, 1000), "rightClickWaitMs": (150, 600)}
@@ -40,8 +40,9 @@ def read_notes_config():
         cfg["title"] = data["title"].strip()[:NOTES_TITLE_MAX]
     if isinstance(data.get("monitor"), str):
         cfg["monitor"] = data["monitor"].strip()
-    if isinstance(data.get("alwaysShowBells"), bool):
-        cfg["alwaysShowBells"] = data["alwaysShowBells"]
+    for key in ("alwaysShowBells", "outline"):
+        if isinstance(data.get(key), bool):
+            cfg[key] = data[key]
     return cfg
 
 
@@ -96,6 +97,10 @@ class NotesPage(Page):
         g.add(switch_row("Always show reminder bells", "Otherwise a note's bell shows when you point at it, "
                          "or while it has a reminder", self.cfg["alwaysShowBells"],
                          lambda on: self.set_now("alwaysShowBells", on)))
+        # Only on or off: the outline is as thick as the windows' border (Hyprland's border size,
+        # set on the Windows page), in their active border's colour, so there's nothing to pick.
+        g.add(switch_row("Outline", "A border as thick as your windows' borders, in their colour",
+                         self.cfg["outline"], lambda on: self.set_now("outline", on)))
         self.add(g)
 
         g = Adw.PreferencesGroup(title="Location")
@@ -125,7 +130,7 @@ class NotesPage(Page):
 
         self.add(reset_group(self.win, "Restore default Desktop Notes settings?",
                              "Titled Reminders, 78% background opacity, 300 px wide, normal text size, bottom "
-                             "right of the main monitor, 32 px from the edges, bells shown on hover, 200 ms for a double right click. "
+                             "right of the main monitor, 32 px from the edges, no outline, bells shown on hover, 200 ms for a double right click. "
                              "Your notes are kept.", self.reset))
 
     def set(self, key, value):

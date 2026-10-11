@@ -187,6 +187,23 @@ def test_always_show_bells_switch_saves_it(open_page):
     assert written()["alwaysShowBells"] is False
 
 
+def test_outline_is_read_only_as_a_switch():
+    pw.NOTES_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    pw.NOTES_CONFIG.write_text(json.dumps({"outline": True}))
+    assert pw.read_notes_config()["outline"] is True
+    pw.NOTES_CONFIG.write_text(json.dumps({"outline": 2}))
+    assert pw.read_notes_config()["outline"] is False
+
+
+@needs_display
+def test_outline_switch_saves_it(open_page):
+    p = open_page("notes")
+    p.switch("Outline", True)
+    assert written()["outline"] is True
+    p.switch("Outline", False)
+    assert written()["outline"] is False
+
+
 def test_double_right_click_speed_is_kept_in_range():
     pw.NOTES_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     pw.NOTES_CONFIG.write_text(json.dumps({"rightClickWaitMs": 5000}))
