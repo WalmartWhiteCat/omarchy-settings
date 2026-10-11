@@ -61,3 +61,21 @@ def test_keys_in_the_app_list_are_not_recorded_as_a_shortcut(open_page, monkeypa
     assert dialog.shown.get_label() == "Waiting for keys…" and dialog.conflict.get_label() == ""
     assert press_key(dialog, Gdk.KEY_r, Gdk.ModifierType.CONTROL_MASK) is True
     assert dialog.keys == "CTRL + R"
+
+
+def test_f_keys_are_recorded_from_the_app_list(open_page, monkeypatch):
+    """Letting the result list have plain keys must not swallow keys that work as a shortcut on
+    their own: the list does nothing with F9, so it was lost and the dialog kept waiting."""
+    installed_apps(monkeypatch, ("firefox.desktop", "Firefox"))
+    p = open_page("keys")
+    p.page.add_custom()
+    dialog = p.win.get_visible_dialog()
+    pick = next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+    pick.activate()
+    spin()
+    assert p._popup_list(pick).child_focus(Gtk.DirectionType.TAB_FORWARD)
+    spin()
+    assert press_key(dialog, Gdk.KEY_F9) is True
+    assert dialog.keys == "F9" and dialog.conflict.get_label() == ""
+    # Keys the list uses still reach it.
+    assert press_key(dialog, Gdk.KEY_Down) is False

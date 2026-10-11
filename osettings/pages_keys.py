@@ -136,13 +136,16 @@ class ShortcutDialog(Adw.Dialog):
     def on_key(self, _ctl, keyval, keycode, state):
         focus = self.get_root().get_focus() if self.get_root() else None
         held = state & CTRL_MODS
-        if isinstance(focus, Gtk.Text) and not held:
-            return False  # typing or moving the cursor in a text field (arrows, Home, F-keys too)
-        if focus is not None and focus.get_ancestor(Gtk.Popover) and not held:
-            return False  # using a drop-down's popup, such as "Open an app"'s result list
-        if not held and Gdk.keyval_name(keyval) in NAVIGATION:
-            return False  # moving focus between buttons
         keys = keys_from_event(keycode, state)
+        if not held:
+            if isinstance(focus, Gtk.Text):
+                return False  # typing or moving the cursor in a text field (arrows, Home, F-keys too)
+            if focus is not None and focus.get_ancestor(Gtk.Popover) and not (keys and bare_ok(keys)):
+                # Using a drop-down's popup, such as "Open an app"'s result list. Keys that work as a
+                # shortcut on their own (F-keys, media keys) mean nothing to it, so they're still recorded.
+                return False
+            if Gdk.keyval_name(keyval) in NAVIGATION:
+                return False  # moving focus between buttons
         if not keys:
             return False
         self.set_keys(keys)
