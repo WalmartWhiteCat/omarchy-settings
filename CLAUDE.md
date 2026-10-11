@@ -90,7 +90,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 | | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | test_page_windows |
 | | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | test_page_rules |
 | Display | Displays (`displays`) | `DisplaysPage`, pages_system | trial with `hyprctl eval` + watchdog; Keep saves `store.monitors` into the Lua; Restore defaults edits `monitors.lua` | test_page_displays, test_review_fixes |
-| | Night Light (`nightlight`) | `NightLightPage`, pages_system | on/off and warmth via `hyprctl hyprsunset temperature`; the schedule is written to `~/.config/hypr/hyprsunset.conf` as hyprsunset profiles (each applies from its `time` until the next: "Turn on at" = `temperature`, "Turn off at" = `identity = true`), then `omarchy restart hyprsunset`; the Lua autostarts hyprsunset while scheduled | test_review_fixes (+ autostart in test_render) |
+| | Night Light (`nightlight`) | `NightLightPage`, pages_system | on/off and warmth via `hyprctl hyprsunset temperature`; the schedule is written to `~/.config/hypr/hyprsunset.conf` as hyprsunset profiles (each applies from its `time` until the next: "Turn on at" = `temperature`, "Turn off at" = `identity = true`), then `omarchy restart hyprsunset`; the Lua autostarts hyprsunset while scheduled | test_page_nightlight, test_review_fixes (+ autostart in test_render) |
 | | Fonts and Text (`text`) | `TextPage`, pages_system | `omarchy font set`, `omarchy display text`; interface font via gsettings (pinned by the hook) | test_page_text |
 | | Cursor (`cursor`) | `CursorPage`, pages_system | `store.cursor` into the Lua, gsettings, `hyprctl setcursor` | test_page_cursor |
 | Input | Keyboard and Mouse (`input`) | `InputPage`, pages_system | `store.values` (`input:...` options) into the Lua; `omarchy toggle touchpad` | test_page_input |
@@ -108,7 +108,7 @@ every file the app touches and how to undo it.
 
 Every page has page-level tests. The `test_page_*.py` files build the real page and cover the
 page's controls broadly (see "Kinds of tests"); the older ones in `test_review_fixes.py` use
-stand-ins and each covers one past fix, so Night Light, Background, Bar and Power have
+stand-ins and each covers one past fix, so Background, Bar and Power have
 thinner coverage than the table suggests. New page tests should use `tests/pagekit.py`.
 
 Pages save in two ways: through the Store (`store.values`, `rules`, `cursor`... saved after a
