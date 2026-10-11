@@ -39,3 +39,25 @@ def test_typing_in_the_app_search_is_not_recorded_as_a_shortcut(open_page, monke
     assert dialog.shown.get_label() == "Waiting for keys…"
     # Held Ctrl still records a shortcut, even from the search field.
     assert dialog.on_key(None, Gdk.KEY_f, keycode_f, Gdk.ModifierType.CONTROL_MASK) is True
+
+
+def test_keys_in_the_app_list_are_not_recorded_as_a_shortcut(open_page, monkeypatch):
+    """With the focus moved from the search field into the drop-down's list (arrow keys, or a
+    click on a result), the focus is no longer a text field, so a typed letter became the shortcut
+    ("R on its own would stop that key working…") instead of going to the list."""
+    installed_apps(monkeypatch, ("firefox.desktop", "Firefox"), ("nautilus.desktop", "Files"))
+    p = open_page("keys")
+    p.page.add_custom()
+    dialog = p.win.get_visible_dialog()
+    pick = next(w for w in widgets(dialog) if isinstance(w, Adw.ComboRow) and w.get_title() == "Open an app")
+    pick.activate()
+    spin()
+    listview = next(w for w in widgets(pick) if isinstance(w, Gtk.ListView) and w.get_ancestor(Gtk.Popover))
+    assert listview.child_focus(Gtk.DirectionType.TAB_FORWARD)
+    spin()
+    focus = dialog.get_root().get_focus()
+    assert not isinstance(focus, Gtk.Text) and focus.get_ancestor(Gtk.Popover)
+    keycode_r = 35  # evdev 27 + 8
+    assert dialog.on_key(None, Gdk.KEY_r, keycode_r, 0) is False
+    assert dialog.shown.get_label() == "Waiting for keys…"
+    assert dialog.on_key(None, Gdk.KEY_r, keycode_r, Gdk.ModifierType.CONTROL_MASK) is True

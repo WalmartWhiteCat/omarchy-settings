@@ -7,7 +7,7 @@ Covered by tests with stand-ins, but never clicked through live:
   watchdog reload). Also a docked laptop with the lid shut.
 - **Keybindings:** a custom shortcut on Super + 1 really replacing the workspace switch; moving F9
   dictation (start and stop together); turning an "Other" shortcut off and on again; typing in
-  the new-shortcut dialog's "Open an app" search (tests check the focus and the key handler, not
+  the new-shortcut dialog's "Open an app" search and arrowing into its results (tests check the focus and the key handler, not
   real key presses).
 - **Night light:** turning it on from hyprsunset's neutral state (after a restart or the schedule's end).
 - **Windows:** the "Omarchy's subtle transparency" switch making windows fully opaque.

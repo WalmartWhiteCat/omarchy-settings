@@ -138,6 +138,8 @@ class ShortcutDialog(Adw.Dialog):
         held = state & CTRL_MODS
         if isinstance(focus, Gtk.Text) and not held:
             return False  # typing or moving the cursor in a text field (arrows, Home, F-keys too)
+        if focus is not None and focus.get_ancestor(Gtk.Popover) and not held:
+            return False  # using a drop-down's popup, such as "Open an app"'s result list
         if not held and Gdk.keyval_name(keyval) in NAVIGATION:
             return False  # moving focus between buttons
         keys = keys_from_event(keycode, state)
