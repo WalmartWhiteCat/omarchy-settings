@@ -237,3 +237,41 @@ def test_typed_shortcuts_are_spelled_like_recorded_ones(sandbox, make_store, typ
     d = recorder(page)
     pk.ShortcutDialog.set_keys(d, pk.typed_keys(typed))
     assert d.keys == keys
+
+
+class Entry:
+    def __init__(self, text=""):
+        self.text = text
+
+    def get_text(self):
+        return self.text
+
+
+def finishing(page, typed, keys="", start=""):
+    d = recorder(page)
+    d.keys, d.custom, d._timeout = keys, None, None
+    d.typed, d._typed_seen = Entry(typed), start
+    d.done, d.closed = [], False
+    d.on_done = d.done.append
+    d.close = lambda: setattr(d, "closed", True)
+    return d
+
+
+def test_save_uses_text_typed_after_a_recorded_key(sandbox, make_store):
+    """Typing a combination (without pressing its apply button) after a key had been recorded used
+    to be ignored: Save kept the recorded key."""
+    d = finishing(keys_page(sandbox, make_store), typed="SUPER + Y", keys="SUPER + T")
+    pk.ShortcutDialog.finish(d)
+    assert d.done == [{"keys": "SUPER + Y"}] and d.closed
+
+
+def test_save_keeps_the_recorded_key_when_the_text_is_unchanged(sandbox, make_store):
+    d = finishing(keys_page(sandbox, make_store), typed="SUPER + T", keys="SUPER + G", start="SUPER + T")
+    pk.ShortcutDialog.finish(d)
+    assert d.done == [{"keys": "SUPER + G"}]
+
+
+def test_save_stays_open_when_the_typed_text_is_refused(sandbox, make_store):
+    d = finishing(keys_page(sandbox, make_store), typed="SUPER", keys="SUPER + T")
+    pk.ShortcutDialog.finish(d)
+    assert d.done == [] and not d.closed and "one key" in d.conflict.text

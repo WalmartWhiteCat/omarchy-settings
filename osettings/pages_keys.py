@@ -76,7 +76,8 @@ class ShortcutDialog(Adw.Dialog):
         self.conflict.add_css_class("warning")
         g.add(self.conflict)
         self.typed = Adw.EntryRow(title="Or type it (e.g. SUPER + SHIFT + R)", text=keys, show_apply_button=True)
-        self.typed.connect("apply", lambda r: self.set_keys(typed_keys(r.get_text())))
+        self.typed.connect("apply", lambda r: self.apply_typed())
+        self._typed_seen = keys  # the field's text when last used, so Save can tell a fresh edit
         g.add(self.typed)
         page_.add(g)
 
@@ -146,17 +147,23 @@ class ShortcutDialog(Adw.Dialog):
         self.set_keys(keys)
         return True
 
+    def apply_typed(self):
+        """Use the typed combination. False when it was refused (the reason is shown)."""
+        self._typed_seen = self.typed.get_text().strip()
+        return self.set_keys(typed_keys(self._typed_seen))
+
     def set_keys(self, keys):
+        """Take `keys` as the new shortcut. False when refused (the reason is shown)."""
         if not keys:
-            return
+            return False
         if key_count(keys) != 1:
             self.conflict.set_label(f"“{keys}” needs exactly one key besides Super, Shift, Ctrl and Alt, "
                                     "e.g. SUPER + SHIFT + R.")
-            return
+            return False
         if not bare_ok(keys):
             self.conflict.set_label(f"{pretty(keys)} on its own would stop that key working in every app. "
                                     "Hold Super, Ctrl or Alt with it.")
-            return
+            return False
         # Reuse the exact spelling of a binding we would replace (including code:N keys),
         # so unbinding it matches.
         clash = self.page.who_uses(keys, ignore=self.ignore)
@@ -169,10 +176,13 @@ class ShortcutDialog(Adw.Dialog):
         self.keys = keys
         self.shown.set_label(pretty(keys))
         self.save.set_sensitive(True)
+        return True
 
     def finish(self):
-        if self.typed.get_text().strip() and self.typed.get_text().strip() != self.keys and not self.keys:
-            self.set_keys(typed_keys(self.typed.get_text()))
+        # Text typed since the field was last used wins over a recorded key, as it's the latest input.
+        typed = self.typed.get_text().strip()
+        if typed and typed != self._typed_seen and not self.apply_typed():
+            return
         if not self.keys:
             return
         result = {"keys": self.keys}
