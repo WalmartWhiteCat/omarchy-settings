@@ -59,7 +59,9 @@ Omarchy's commands and files (the Pages table, "Design decisions") against the n
   (`build()`, `rebuild()`, `reset(done)`).
 - `store.py`: `Store` holds everything the app owns (`settings.json`) and renders
   `~/.config/hypr/omarchy_settings.lua`. Saves are debounced (`schedule_save(after=…)`), checked with
-  `luac`, written atomically, then `hyprctl reload` + `configerrors`. Also `ensure_required`,
+  `luac`, written atomically, then `hyprctl reload` + `configerrors`; a save that leaves the Lua
+  unchanged (pins, night light warmth) skips the reload unless `ensure_required` just added the
+  require line (it returns "added"). Also `ensure_required`,
   `require_state`, `refresh_rebinds`, `omarchy_opacity_tags`.
 - `binds.py`: parses Omarchy's binding files (every `.lua` in `default/hypr/bindings`, known ones
   first: `binding_files()`), reads exact key spellings by running hyprland.lua with

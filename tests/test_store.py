@@ -219,6 +219,37 @@ def test_save_writes_lua_requires_and_reloads(make_store, sandbox):
     assert st.results == []
 
 
+def reloads(sandbox):
+    return sandbox.run_async.count(["hyprctl", "reload"])
+
+
+def test_a_save_that_changes_no_lua_doesnt_reload_hyprland(make_store, sandbox):
+    """Pins, the interface font and the night light's warmth live only in settings.json: reloading
+    Hyprland for them re-ran the whole config (and re-applied monitors) for nothing."""
+    store_mod.HYPR_MAIN.write_text(f'require("hypr.looknfeel")\n{store_mod.REQUIRE_LINE}\n')
+    st = make_store()
+    st.values = {"general:gaps_in": 4}
+    st.save_now()
+    assert reloads(sandbox) == 1
+    st.pins["icon_theme"] = "Papirus"
+    ran = []
+    st.schedule_save(after=lambda: ran.append(1))
+    st.save_now()
+    assert reloads(sandbox) == 1 and ran == [1]
+    assert json.loads(store_mod.SETTINGS_FILE.read_text())["pins"] == {"icon_theme": "Papirus"}
+    st.values["general:gaps_in"] = 6
+    st.save_now()
+    assert reloads(sandbox) == 2
+
+
+def test_adding_the_require_line_reloads_even_with_the_same_lua(make_store, sandbox):
+    st = make_store()
+    store_mod.HYPR_LUA.write_text(st.render_lua())
+    store_mod.HYPR_MAIN.write_text('require("hypr.looknfeel")\n')
+    st.save_now()
+    assert reloads(sandbox) == 1
+
+
 def test_save_refuses_invalid_lua(make_store, sandbox, monkeypatch):
     monkeypatch.setattr(store_mod, "lua_syntax_error", lambda text: "boom")
     store_mod.HYPR_LUA.write_text("-- previous good file\n")
@@ -319,6 +350,7 @@ def test_ensure_required_reports_loaded():
     store_mod.HYPR_MAIN.write_text(f'  {store_mod.REQUIRE_LINE}\n')
     assert store_mod.ensure_required() == "loaded"
     store_mod.HYPR_MAIN.write_text('require("hypr.looknfeel")\n')
+    assert store_mod.ensure_required() == "added"
     assert store_mod.ensure_required() == "loaded"
 
 

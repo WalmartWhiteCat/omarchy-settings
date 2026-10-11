@@ -345,7 +345,12 @@ class Store:
             # Atomic: a crash mid-write leaves the previous file, never a truncated one.
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
             write_atomic(SETTINGS_FILE, json.dumps(self.to_json(), indent=2))
-            write_atomic(HYPR_LUA, lua)
+            try:
+                lua_unchanged = HYPR_LUA.read_text() == lua
+            except OSError:
+                lua_unchanged = False
+            if not lua_unchanged:
+                write_atomic(HYPR_LUA, lua)
             state = ensure_required()
         except Exception as e:  # read-only file, full disk, missing folder…
             self.on_result(f"Couldn't save settings: {e}")
@@ -356,6 +361,13 @@ class Store:
             self._warned_disabled = True
             self.on_result("Changes aren't being loaded: the omarchy_settings line in "
                            "~/.config/hypr/hyprland.lua is commented out")
+
+        if lua_unchanged and state != "added":
+            # Only settings.json changed (pins, the night light's warmth…): Hyprland would load
+            # exactly what it has, so a reload would re-run the whole config for nothing.
+            for cb in callbacks:
+                cb()
+            return False
 
         style = tuple(self.values.get(k) for k in SHELL_STYLE_KEYS)
         style_changed = style != self._shell_style
@@ -565,7 +577,7 @@ def refresh_shell_style():
 def ensure_required():
     """Make hyprland.lua load our generated file (once, with a backup).
 
-    Returns "loaded" when the require line is active (or was just added), "disabled" when
+    Returns "loaded" when the require line is active, "added" when it was just added, "disabled" when
     the user commented it out (respected: we never re-add it), or None when there is no
     hyprland.lua."""
     try:
@@ -583,4 +595,4 @@ def ensure_required():
     else:
         text += f"\n{REQUIRE_LINE}\n"
     write_atomic(HYPR_MAIN, text)  # the user's whole desktop config: never half-written
-    return "loaded"
+    return "added"
