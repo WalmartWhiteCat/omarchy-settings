@@ -12,6 +12,7 @@ from gi.repository import Gdk  # noqa: E402
 
 from .core import OMARCHY_PATH, hypr_json, run
 
+# Omarchy's binding files in their usual order; any others in the folder are read too.
 BIND_FILES = ["applications", "clipboard", "media", "tiling", "utilities", "voxtype"]
 FILE_TITLES = {"applications": "Applications", "clipboard": "Clipboard", "media": "Media keys",
                "tiling": "Windows and workspaces", "utilities": "Menus and utilities",
@@ -41,6 +42,22 @@ MOD_ALIASES = {"SUPER": "SUPER", "WIN": "SUPER", "MOD4": "SUPER", "LOGO": "SUPER
 MOD_ORDER = ["SUPER", "SHIFT", "CTRL", "ALT"]
 LUA_WORDS = {"true", "false", "nil", "and", "or", "not", "o", "hl", "tostring", "function", "end"}
 CALL_RE = re.compile(r'^(o\.bind|o\.bind_toggle|hl\.bind)\(\s*"([^"]+)"\s*,\s*(?:"([^"]*)"|nil)')
+
+
+def binding_files():
+    """Omarchy's binding files as (group, path): the known ones in their usual order, then any
+    others (a file Omarchy added or renamed), so none of its shortcuts go missing."""
+    folder = OMARCHY_PATH / "default/hypr/bindings"
+    try:
+        found = {p.stem: p for p in folder.glob("*.lua") if p.is_file()}
+    except OSError:
+        return []
+    order = [n for n in BIND_FILES if n in found] + sorted(n for n in found if n not in BIND_FILES)
+    return [(n, found[n]) for n in order]
+
+
+def group_title(group):
+    return FILE_TITLES.get(group) or re.sub(r"[-_]+", " ", group).strip().capitalize()
 
 
 def normalize(keys):
@@ -192,9 +209,9 @@ def parse_default_binds(owned=(), disabled_info=None):
     that are currently unbound (and so missing from the printed list) can still be listed."""
     out = []
     seen = set()
-    for name in BIND_FILES:
+    for name, path in binding_files():
         try:
-            text = (OMARCHY_PATH / f"default/hypr/bindings/{name}.lua").read_text()
+            text = path.read_text()
         except Exception:
             continue
         stack = []  # (kind, condition) of blocks currently open

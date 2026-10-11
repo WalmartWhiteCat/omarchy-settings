@@ -4,7 +4,8 @@ import re
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from .binds import FILE_TITLES, bare_ok, keys_from_event, normalize, parse_default_binds, pretty, siblings
+from .binds import (bare_ok, group_title, keys_from_event, normalize, parse_default_binds, pretty,
+                    siblings)
 from .core import (HYPR_DIR, OMARCHY_PATH, Page, clear_group, group_add, icon_button, keycap, reset_group, run,
                    run_async, spawn_detached)
 from .store import CAPTURE_SUBMAP, require_state
@@ -198,7 +199,7 @@ class KeysPage(Page):
         for b in self.defaults:
             g = groups.get(b["group"])
             if not g:
-                g = groups[b["group"]] = Adw.PreferencesGroup(title=FILE_TITLES.get(b["group"], b["group"]))
+                g = groups[b["group"]] = Adw.PreferencesGroup(title=group_title(b["group"]))
                 if b["group"] == "other":
                     g.set_description("Made by Omarchy in loops or scripts, or by your own "
                                       "~/.config/hypr/bindings.lua. These can be turned off and on, not changed.")

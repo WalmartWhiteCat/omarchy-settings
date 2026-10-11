@@ -58,7 +58,8 @@ Omarchy's commands and files (the Pages table, "Design decisions") against the n
   `~/.config/hypr/omarchy_settings.lua`. Saves are debounced (`schedule_save(after=…)`), checked with
   `luac`, written atomically, then `hyprctl reload` + `configerrors`. Also `ensure_required`,
   `require_state`, `refresh_rebinds`, `omarchy_opacity_tags`.
-- `binds.py`: parses Omarchy's binding files, reads exact key spellings by running hyprland.lua with
+- `binds.py`: parses Omarchy's binding files (every `.lua` in `default/hypr/bindings`, known ones
+  first: `binding_files()`), reads exact key spellings by running hyprland.lua with
   a stubbed `hl` (as Omarchy's keybinding menu does), key normalisation (`code:N` = produced key).
 - `pages_look.py`, `pages_system.py`, `pages_keys.py`, `pages_widgets.py`: pages. `pages_widgets.py`
   writes the Desktop Notes widget's `~/.config/desktop-notes/config.json`; the widget itself is a shell

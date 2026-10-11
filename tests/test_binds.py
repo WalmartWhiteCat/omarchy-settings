@@ -218,10 +218,7 @@ def test_installed_omarchy_bindings_never_lift_code_out_of_blocks(sandbox, monke
     out = binds.parse_default_binds()
     assert out
     checked = 0
-    for name in binds.BIND_FILES:
-        f = REAL_OMARCHY / f"default/hypr/bindings/{name}.lua"
-        if not f.exists():
-            continue
+    for name, f in binds.binding_files():
         lines = f.read_text().splitlines()
         inside = loop_or_function_lines(f.read_text())
         entries = [e for e in out if e["group"] == name]
@@ -311,3 +308,19 @@ def test_keyword_inside_a_string_does_not_open_a_block(sandbox):
     out = by_keys(binds.parse_default_binds())
     assert out["SUPER + A"]["rebindable"] is True
     assert out["SUPER + B"]["rebindable"] is True
+
+
+def test_binding_files_omarchy_adds_or_renames_are_read(sandbox):
+    """The file list used to be fixed, so a renamed file's shortcuts looked gone (and changes to
+    them were dropped at startup). Known files keep their order and titles; others follow."""
+    write_binds(sandbox,
+                tiling='o.bind("SUPER + J", "Toggle split", "x")\n',
+                windows='o.bind("SUPER + W", "Close window", "y")\n',
+                **{"screen-capture": 'o.bind("SUPER + P", "Screenshot", "z")\n'})
+    out = binds.parse_default_binds()
+    assert [e["group"] for e in out] == ["tiling", "screen-capture", "windows"]
+    w = by_keys(out)["SUPER + W"]
+    assert w["line"] == 'o.bind("SUPER + W", "Close window", "y")' and w["rebindable"]
+    assert binds.group_title("tiling") == "Windows and workspaces"
+    assert binds.group_title("screen-capture") == "Screen capture"
+    assert binds.group_title("other") == "Other"
