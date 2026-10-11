@@ -476,6 +476,42 @@ def test_trash_failure_keeps_the_file(sandbox, monkeypatch):
     assert "Couldn't move" in page.win.toasts[-1]
 
 
+
+class PickedFiles:
+    """What Gtk.FileDialog.open_multiple_finish returns: a list model of Gio.File."""
+
+    def __init__(self, files):
+        from gi.repository import Gio
+        self.store = Gio.ListStore.new(Gio.File)
+        for f in files:
+            self.store.append(f)
+
+    def open_multiple_finish(self, _result):
+        return self.store
+
+
+def test_adding_backgrounds_skips_what_cant_be_copied(sandbox, monkeypatch, tmp_path):
+    """A picked file without a local path (a remote location) raised TypeError, and an unreadable
+    one raised from shutil.copy2: either stopped the whole add with nothing said."""
+    from gi.repository import Gio
+    page, mine, stock = bg_page(sandbox, monkeypatch)
+    pics = tmp_path / "pics"
+    pics.mkdir()
+    (pics / "good.png").write_bytes(b"png")
+    unreadable = pics / "locked.png"
+    unreadable.write_bytes(b"png")
+    unreadable.chmod(0)
+    picked = PickedFiles([Gio.File.new_for_uri("sftp://host/remote.png"),
+                          Gio.File.new_for_path(str(unreadable)), Gio.File.new_for_path(str(pics / "good.png"))])
+    try:
+        pl.BackgroundPage.on_files(page, picked, None)
+    finally:
+        unreadable.chmod(0o644)
+    assert (mine / "good.png").read_bytes() == b"png" and not (mine / "locked.png").exists()
+    assert ["omarchy", "theme", "bg", "set", str(mine / "good.png")] in sandbox.run_async
+    assert any("2" in t and "couldn't be added" in t for t in page.win.toasts)
+
+
 LID_SHUT = dict(MON, name="eDP-1", width=2880, height=1800, refreshRate=120.0, x=0, y=0, disabled=True,
                 availableModes=["2880x1800@120.00Hz"])
 EXTERNAL = dict(MON, name="DP-1", x=0)

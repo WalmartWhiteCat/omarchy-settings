@@ -435,12 +435,25 @@ class BackgroundPage(Page):
         except GLib.Error:
             return
         dest = self.user_dir()
-        dest.mkdir(parents=True, exist_ok=True)
-        last = None
+        last, failed = None, []
         for i in range(files.get_n_items()):
-            src = Path(files.get_item(i).get_path())
-            last = unique_path(dest / src.name)
-            shutil.copy2(src, last)
+            f = files.get_item(i)
+            local = f.get_path()  # None for a file that isn't on this computer
+            target = None
+            try:
+                if local is None:
+                    raise OSError("not a local file")
+                dest.mkdir(parents=True, exist_ok=True)
+                target = unique_path(dest / Path(local).name)
+                shutil.copy2(local, target)
+                last = target
+            except OSError:
+                if target is not None:
+                    target.unlink(missing_ok=True)  # no half-copied image in the grid
+                failed.append(f.get_basename() or f.get_uri())
+        if failed:
+            self.win.toast(f"{len(failed)} file{'s' if len(failed) > 1 else ''} couldn't be added: "
+                           f"{', '.join(failed)[:120]}")
         self.populate()
         if last:
             run_async(["omarchy", "theme", "bg", "set", str(last)], lambda *_: self.populate())
