@@ -7,6 +7,8 @@ from gi.repository import GLib
 from osettings import pages_widgets as pw
 from osettings import window
 
+from .pagekit import needs_display, open_page  # noqa: F401  (open_page is a fixture)
+
 
 class FakeWin:
     def __init__(self):
@@ -139,3 +141,26 @@ def test_notes_page_is_in_the_sidebar_and_restore_all():
     keys = [cls.key for _, classes in window.SECTIONS for cls in classes]
     assert "notes" in keys and "notes" in window.RESET_ORDER
     assert set(window.RESET_ORDER) <= set(keys)
+
+
+def written():
+    return json.loads(pw.NOTES_CONFIG.read_text())
+
+
+def test_title_is_read_trimmed_and_short():
+    pw.NOTES_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    pw.NOTES_CONFIG.write_text(json.dumps({"title": "  Todo  "}))
+    assert pw.read_notes_config()["title"] == "Todo"
+    pw.NOTES_CONFIG.write_text(json.dumps({"title": "x" * 100}))
+    assert len(pw.read_notes_config()["title"]) == pw.NOTES_TITLE_MAX
+    pw.NOTES_CONFIG.write_text(json.dumps({"title": 5}))
+    assert pw.read_notes_config()["title"] == "Reminders"
+
+
+@needs_display
+def test_title_field_saves_it(open_page):
+    p = open_page("notes")
+    p.enter("Title", "  Todo ")
+    assert written()["title"] == "Todo"
+    p.enter("Title", "")
+    assert written()["title"] == ""

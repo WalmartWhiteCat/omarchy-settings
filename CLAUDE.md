@@ -63,7 +63,8 @@ Omarchy's commands and files (the Pages table, "Design decisions") against the n
 - `pages_look.py`, `pages_system.py`, `pages_keys.py`, `pages_widgets.py`: pages. `pages_widgets.py`
   writes the Desktop Notes widget's `~/.config/desktop-notes/config.json`; the widget itself is a shell
   plugin in `~/.config/omarchy/plugins/sourced.desktop-notes` (not in this repo) that watches that file
-  and clamps to the same ranges (`NOTES_LIMITS`), so change both together. Its sliders write the
+  and clamps to the same ranges (`NOTES_LIMITS`, and `NOTES_TITLE_MAX` for the card's title), so
+  change both together. Text and switch settings (title...) are saved at once (`set_now`). Its sliders write the
   latest values at most every 100ms while they move (a timer that isn't restarted per step), so the
   card follows them live; a debounce restarted per step wrote only once a slider stopped. `window.py`: sidebar, lazy pages,
   Restore all (`RESET_ORDER`), startup checks.

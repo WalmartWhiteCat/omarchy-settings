@@ -12,10 +12,12 @@ NOTES_CONFIG = HOME / ".config/desktop-notes/config.json"
 NOTES_PLUGIN = HOME / ".config/omarchy/plugins/sourced.desktop-notes"
 
 NOTES_DEFAULTS = {"opacity": 78, "width": 300, "textScale": 100, "position": "bottom-right",
-                  "marginX": 32, "marginY": 32}
+                  "marginX": 32, "marginY": 32, "title": "Reminders"}
 # key -> (lowest, highest); the widget clamps to the same ranges for hand-edited files.
 NOTES_LIMITS = {"opacity": (0, 100), "width": (200, 800), "textScale": (70, 200),
                 "marginX": (0, 1000), "marginY": (0, 1000)}
+# The card's heading is kept to one short line; empty hides it. The widget's titleMax matches.
+NOTES_TITLE_MAX = 60
 POSITIONS = [("Top left", "top-left"), ("Top", "top"), ("Top right", "top-right"),
              ("Left", "left"), ("Center", "center"), ("Right", "right"),
              ("Bottom left", "bottom-left"), ("Bottom", "bottom"), ("Bottom right", "bottom-right")]
@@ -33,6 +35,8 @@ def read_notes_config():
             cfg[key] = int(min(hi, max(lo, v)))
     if data.get("position") in dict((v, l) for l, v in POSITIONS):
         cfg["position"] = data["position"]
+    if isinstance(data.get("title"), str):
+        cfg["title"] = data["title"].strip()[:NOTES_TITLE_MAX]
     return cfg
 
 
@@ -61,6 +65,11 @@ class NotesPage(Page):
             self.add(g)
 
         g = Adw.PreferencesGroup(title="Look", description="Changes show on the desktop right away.")
+        title = Adw.EntryRow(title="Title", text=self.cfg["title"], show_apply_button=True,
+                             max_length=NOTES_TITLE_MAX,
+                             tooltip_text="The heading on the card; leave it empty to hide it")
+        title.connect("apply", lambda r: self.set_now("title", r.get_text().strip()))
+        g.add(title)
         g.add(scale_row("Background opacity", "Lower lets more of the wallpaper through; text stays solid",
                         *NOTES_LIMITS["opacity"], 1, self.cfg["opacity"], 0, lambda v: self.set("opacity", v)))
         g.add(scale_row("Width", "In pixels", *NOTES_LIMITS["width"], 10, self.cfg["width"], 0,
@@ -82,8 +91,8 @@ class NotesPage(Page):
         self.add(g)
 
         self.add(reset_group(self.win, "Restore default Desktop Notes settings?",
-                             "78% background opacity, 300 px wide, normal text size, bottom right, 32 px from "
-                             "the edges. Your notes are kept.", self.reset))
+                             "Titled Reminders, 78% background opacity, 300 px wide, normal text size, bottom "
+                             "right, 32 px from the edges. Your notes are kept.", self.reset))
 
     def set(self, key, value):
         self.cfg[key] = value
@@ -100,6 +109,11 @@ class NotesPage(Page):
         except OSError as e:
             self.win.toast(f"Couldn't save the Desktop Notes settings: {e}")
         return False
+
+    def set_now(self, key, value):
+        """Saves a change that isn't a slider step straight away."""
+        self.cfg[key] = value
+        self.flush()
 
     def set_position(self, position):
         self.cfg["position"] = position
