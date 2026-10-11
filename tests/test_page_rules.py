@@ -101,3 +101,12 @@ def test_remove_all_rules(open_page):
     p.save()
     assert p.saved()["rules"] == [] and finished == [True]
     assert p.has_row("No rules yet")
+
+
+def test_a_damaged_rule_in_settings_still_opens_the_app(open_page):
+    """A hand-edited null used to stop the window from opening: the startup save raised."""
+    p = open_page("rules", settings={"rules": [
+        {"class": "foot", "opacity_active": None, "opacity_inactive": 0.5},
+        {"class": "kitty", "float": True}]})
+    assert p.has_row("kitty") and not p.has_row("foot")
+    assert any("Ignored 1 unreadable entry" in t for t in p.toasts)

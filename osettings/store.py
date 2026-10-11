@@ -2,6 +2,7 @@
 ~/.config/hypr/omarchy_settings.lua, which hyprland.lua requires after looknfeel.lua."""
 
 import json
+import math
 import re
 import shutil
 import time
@@ -138,11 +139,24 @@ class Store:
         """Drop entries the Lua generator can't handle, so a bad settings.json can't stop the
         app from starting. Returns how many were dropped."""
         def num(v, kind=float):
+            # A real, finite number (JSON allows NaN and Infinity; true/false aren't numbers here).
+            if isinstance(v, bool):
+                return False
             try:
                 kind(v)
-                return True
-            except (TypeError, ValueError):
+                return math.isfinite(float(v))
+            except (TypeError, ValueError, OverflowError):
                 return False
+
+        def finite(v):
+            """No NaN or infinity anywhere inside a Hyprland option's value."""
+            if isinstance(v, float):
+                return math.isfinite(v)
+            if isinstance(v, dict):
+                return all(finite(x) for x in v.values())
+            if isinstance(v, (list, tuple)):
+                return all(finite(x) for x in v)
+            return v is None or isinstance(v, (bool, int, str))
 
         dropped = 0
 
@@ -152,8 +166,22 @@ class Store:
             dropped += len(items) - len(good)
             return good
 
-        self.rules = keep(self.rules, lambda r: isinstance(r, dict) and isinstance(r.get("class"), str)
-                          and all(r.get(k) is None or num(r[k]) for k in ("opacity_active", "opacity_inactive")))
+        # An option that is also a section of another ("general:col" and "general:col:active_border")
+        # can't be both a value and a table in the generated Lua.
+        for opt in list(self.values):
+            v = self.values[opt]
+            if (not isinstance(opt, str) or not finite(v)
+                    or any(other.startswith(opt + ":") for other in self.values if isinstance(other, str))):
+                del self.values[opt]
+                dropped += 1
+
+        def rule_ok(r):
+            return (isinstance(r, dict) and isinstance(r.get("class"), str)
+                    and all(k not in r or num(r[k]) for k in ("opacity_active", "opacity_inactive"))
+                    and ("workspace" not in r or r["workspace"] is None or isinstance(r["workspace"], str)
+                         or num(r["workspace"], int)))
+
+        self.rules = keep(self.rules, rule_ok)
         self.autostart = keep(self.autostart, lambda a: isinstance(a, dict) and isinstance(a.get("command"), str))
         b = self.binds
         b["disabled"] = keep(b["disabled"], lambda k: isinstance(k, str))
@@ -163,9 +191,10 @@ class Store:
                            and isinstance(c.get("command"), str))
         for name in list(self.monitors):
             m = self.monitors[name]
-            if not (isinstance(m, dict) and all(m.get(k) is None or num(m[k], int if k in ("x", "y", "transform")
-                                                                         else float)
-                                                for k in ("x", "y", "scale", "transform"))
+            if not (isinstance(m, dict)
+                    and all(k not in m or num(m[k], int if k in ("x", "y", "transform") else float)
+                            for k in ("x", "y", "scale", "transform"))
+                    and ("scale" not in m or float(m["scale"]) > 0)
                     and isinstance(m.get("mode", ""), str)):
                 del self.monitors[name]
                 dropped += 1
@@ -175,7 +204,7 @@ class Store:
         if self.cursor.get("theme") is not None and not isinstance(self.cursor["theme"], str):
             self.cursor.pop("theme")
             dropped += 1
-        if self.anim.get("factor") is not None and not num(self.anim["factor"]):
+        if self.anim.get("factor") is not None and not (num(self.anim["factor"]) and float(self.anim["factor"]) > 0):
             self.anim.pop("factor")
             dropped += 1
         for k in ("windows", "workspaces"):
@@ -295,8 +324,12 @@ class Store:
     def _save(self):
         self._pending = None
         callbacks, self._after_save = self._after_save, []
-        lua = self.render_lua()
-        err = lua_syntax_error(lua)
+        try:
+            lua = self.render_lua()
+        except Exception as e:  # a value _clean didn't catch: report it, never stop the app
+            lua, err = None, f"{type(e).__name__}: {e}"
+        else:
+            err = lua_syntax_error(lua)
         if err:
             # Nothing is written, so the last good settings.json and Lua file stay in place.
             self.on_result(f"Not saved, generated config is invalid: {err}")

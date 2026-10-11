@@ -97,7 +97,8 @@ config; a failing part shows a notification. Before writing, the app checks the 
 - **Keybindings:** while you record a shortcut, your other shortcuts are paused so they don't fire.
   Super + Escape gets you out if anything goes wrong.
 - **Damaged settings:** an unreadable `settings.json` is set aside as `settings.json.broken-<time>`,
-  never silently overwritten.
+  never silently overwritten. Single entries it can't use (a missing number, NaN, a wrong type) are
+  skipped with a message, so the app still opens.
 
 ## Uninstall completely
 

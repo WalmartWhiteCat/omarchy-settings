@@ -345,11 +345,43 @@ def test_saves_are_atomic(make_store, monkeypatch):
     {"binds": {"custom": [{"keys": 5, "command": "x"}], "rebinds": [{"old": "A"}]}},
     {"autostart": [{"command": None}, "foo"]},
     {"rules": [None, {"class": "x", "opacity_active": "half"}]},
+    {"rules": [{"class": "foot", "opacity_active": None, "opacity_inactive": 0.5}]},
+    {"rules": [{"class": "foot", "opacity_active": 0.9, "opacity_inactive": None}]},
+    {"rules": [{"class": "foot", "workspace": [1]}]},
+    {"rules": [{"class": "foot", "opacity_active": float("nan")}]},
+    {"monitors": {"DP-1": {"x": None, "y": 0}}},
+    {"monitors": {"DP-1": {"scale": None}}},
+    {"monitors": {"DP-1": {"scale": float("inf")}}},
+    {"hyprland": {"general:gaps_in": float("nan")}},
+    {"hyprland": {"decoration:blur:noise": float("-inf")}},
+    {"hyprland": {"general:col": "x", "general:col:active_border": "rgba(ffffffff)"}},
+    {"hyprland": {"general:col:active_border": {"colors": [float("nan")], "angle": 45}}},
+    {"animations": {"factor": float("nan")}},
+    {"animations": {"factor": 0}},
+    {"cursor": {"size": float("inf")}},
 ])
 def test_bad_entries_never_stop_the_app(make_store, data):
     st = make_store(data)
     lua = st.render_lua()
     assert luac_error(lua) is None
+    assert "None" not in lua and "nan" not in lua.lower() and "inf" not in lua.replace("info", "")
+
+
+def test_a_renderer_error_is_reported_not_raised(make_store, monkeypatch):
+    """Whatever slips past _clean, a save (and so opening the window) must not raise."""
+    st = make_store({"hyprland": {"general:gaps_in": 4}})
+
+    def broken():
+        raise TypeError("bad value")
+
+    monkeypatch.setattr(st, "render_lua", broken)
+    ran = []
+    st.schedule_save(after=lambda: ran.append(1))
+    st.save_now()
+    st.sync_file()
+    assert ran == [1]
+    assert any(r and "bad value" in r for r in st.results)
+    assert not store_mod.HYPR_LUA.exists()
 
 
 def test_named_workspace_rule_is_kept():
