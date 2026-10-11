@@ -371,6 +371,13 @@ def combo_row(title, subtitle, labels, selected, on_change, values=None):
     return row
 
 
+def search_combo(title, labels, subtitle=""):
+    """A drop-down over `labels` with a search field. The expression tells it what to match typed
+    text against; without one (as before) the search field filtered nothing."""
+    return Adw.ComboRow(title=title, subtitle=subtitle, model=Gtk.StringList.new(labels), enable_search=True,
+                        expression=Gtk.PropertyExpression.new(Gtk.StringObject, None, "string"))
+
+
 def spin_row(title, subtitle, lo, hi, step, value, on_change, digits=0):
     row = Adw.SpinRow.new_with_range(lo, hi, step)
     row.set_title(title)

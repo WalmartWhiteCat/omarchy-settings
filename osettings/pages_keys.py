@@ -7,7 +7,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from .binds import (bare_ok, canonical, group_title, key_count, keys_from_event, normalize, parse_default_binds,
                     pretty, siblings)
 from .core import (HYPR_DIR, OMARCHY_PATH, Page, clear_group, group_add, icon_button, keycap, reset_group, run,
-                   run_async, spawn_detached)
+                   run_async, search_combo, spawn_detached)
 from .store import CAPTURE_SUBMAP, require_state
 
 
@@ -86,9 +86,8 @@ class ShortcutDialog(Adw.Dialog):
             self.desc = Adw.EntryRow(title="Name", text=custom.get("description", ""))
             g2.add(self.desc)
             self.apps = app_choices()
-            pick = Adw.ComboRow(title="Open an app", subtitle="Or type a command below",
-                                model=Gtk.StringList.new(["—"] + [a.get_display_name() for a in self.apps]),
-                                enable_search=True)
+            pick = search_combo("Open an app", ["—"] + [a.get_display_name() for a in self.apps],
+                                subtitle="Or type a command below")
             pick.connect("notify::selected", self.on_app)
             g2.add(pick)
             self.command = Adw.EntryRow(title="Command", text=custom.get("command", ""))
@@ -466,8 +465,7 @@ class AutostartPage(Page):
                                  description="Apps and commands to run when you log in. Changes apply from the "
                                              "next login; use ▶ to start one now.")
         self.apps = app_choices()
-        self.pick = Adw.ComboRow(title="Add an app", model=Gtk.StringList.new([a.get_display_name() for a in self.apps]),
-                                 enable_search=True)
+        self.pick = search_combo("Add an app", [a.get_display_name() for a in self.apps])
         self.pick.add_suffix(icon_button("list-add-symbolic", "Add", self.add_app))
         g.add(self.pick)
         self.cmd = Adw.EntryRow(title="Or add a command", show_apply_button=True)

@@ -54,6 +54,35 @@ class Opened:
     def store(self):
         return self.win.store
 
+    @staticmethod
+    def _popup_list(row):
+        return next(w for w in widgets(row) if isinstance(w, Gtk.ListView) and w.get_ancestor(Gtk.Popover))
+
+    def search(self, row, text):
+        """Open a searchable drop-down, type `text` in its search field and return the labels it
+        then lists (after the search field's short typing delay)."""
+        row.activate()
+        spin()
+        entry = next(w for w in widgets(row) if isinstance(w, Gtk.Text) and w.get_ancestor(Gtk.Popover))
+        entry.grab_focus()
+        entry.set_text(text)
+        end = GLib.get_monotonic_time() + 400_000
+        while GLib.get_monotonic_time() < end:
+            GLib.MainContext.default().iteration(False)
+        model = self._popup_list(row).get_model()
+        return [model.get_item(i).get_string() for i in range(model.get_n_items())]
+
+    def pick_found(self, row, label):
+        """Choose `label` from the drop-down's search results, as clicking it would: a click selects
+        the item in the popup, then activates it (libadwaita reads the popup's selection, clears the
+        search and maps it back to the full list)."""
+        lv = self._popup_list(row)
+        model = lv.get_model()
+        i = next(i for i in range(model.get_n_items()) if model.get_item(i).get_string() == label)
+        model.select_item(i, True)
+        lv.emit("activate", i)
+        spin()
+
     def rows(self, kind=Adw.PreferencesRow):
         return [w for w in widgets(self.page) if isinstance(w, kind)]
 

@@ -94,7 +94,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 | | Fonts and Text (`text`) | `TextPage`, pages_system | `omarchy font set`, `omarchy display text`; interface font via gsettings (pinned by the hook) | test_page_text |
 | | Cursor (`cursor`) | `CursorPage`, pages_system | `store.cursor` into the Lua, gsettings, `hyprctl setcursor` | test_page_cursor |
 | Input | Keyboard and Mouse (`input`) | `InputPage`, pages_system | `store.values` (`input:...` options) into the Lua; `omarchy toggle touchpad` | test_page_input |
-| | Keybindings (`keys`) | `KeysPage`, pages_keys | `store.binds` (rebinds, unbinds, custom) into the Lua; parsing in `binds.py` | test_keybinding_fixes, test_review_fixes, test_binds |
+| | Keybindings (`keys`) | `KeysPage`, pages_keys | `store.binds` (rebinds, unbinds, custom) into the Lua; parsing in `binds.py` | test_page_keys, test_keybinding_fixes, test_review_fixes, test_binds |
 | System | Bar (`bar`) | `BarPage`, pages_system | `omarchy bar ...`, `omarchy plugin enable/disable`; `shell.json` only for removing the menu/media widget | test_page_bar, test_review_fixes |
 | | Power and Notifications (`power`) | `PowerPage`, pages_system | `omarchy toggle ...`; idle times written straight to `shell.json` (`idle.screensaver`, `idle.lock`, in seconds; read by Omarchy's idle service, `shell/plugins/services/idle/Service.qml`); Do Not Disturb via `omarchy-shell notifications` | test_page_power, test_review_fixes |
 | | Default Apps (`apps`) | `AppsPage`, pages_system | `omarchy default ...` | test_page_apps |
@@ -209,7 +209,8 @@ Kinds of tests:
   `switch(title, on)`, `choose(title, label)` (drop-down), `slide(title, value)`,
   `enter(title, text)` (text field + apply), `number(title, value)` (spinner), `press(title)`
   (button row), `click(tooltip, within=row)` (icon button), `row(title, kind=Adw.PreferencesRow)`,
-  `rows(kind)`, `has_row(title)`; `save()` runs the pending
+  `rows(kind)`, `has_row(title)`, `search(row, text)` (type in a searchable drop-down; returns what
+  it lists), `pick_found(row, label)` (choose a search result); `save()` runs the pending
   save; `saved()` is settings.json, `lua()` the generated file; `toasts` collects toasts and busy
   messages; `page` is looked up each time because pages rebuild themselves. `callbacks(monkeypatch,
   module)` records each run_async/run_chain's done callback so a test can finish a command as if it

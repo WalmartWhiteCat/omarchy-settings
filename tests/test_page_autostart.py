@@ -100,3 +100,16 @@ def test_remove_all(open_page, monkeypatch):
     p.save()
     assert p.saved()["autostart"] == [] and finished == [True]
     assert p.has_row("Nothing added yet")
+
+
+def test_search_the_app_list(open_page, monkeypatch):
+    """Typing in the drop-down's search field did nothing: it had no expression to match on."""
+    apps(monkeypatch, ("firefox.desktop", "Firefox"), ("nautilus.desktop", "Files"), ("kitty.desktop", "Kitty"))
+    p = open_page("autostart")
+    pick = p.row("Add an app", Adw.ComboRow)
+    assert p.search(pick, "fi") == ["Firefox", "Files"]
+    assert p.search(pick, "kit") == ["Kitty"]
+    p.pick_found(pick, "Kitty")
+    p.click("Add")
+    p.save()
+    assert p.saved()["autostart"] == [{"command": "kitty.desktop", "launch": True, "enabled": True}]
