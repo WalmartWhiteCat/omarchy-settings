@@ -9,7 +9,7 @@ import time
 
 from gi.repository import GLib
 
-from .core import (CONFIG_DIR, HYPR_DIR, OMARCHY_PATH, STATE, hypr_option, lua_str, lua_syntax_error,
+from .core import (CONFIG_DIR, HYPR_DIR, OMARCHY_PATH, STATE, hypr_option, lua_key, lua_str, lua_syntax_error,
                    lua_table, lua_value, run_async, write_atomic)
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
@@ -149,14 +149,15 @@ class Store:
                 return False
 
         def finite(v):
-            """No NaN or infinity anywhere inside a Hyprland option's value."""
+            """No NaN, infinity or null anywhere inside a Hyprland option's value (Lua has no
+            null to write: it came out as the text "None")."""
             if isinstance(v, float):
                 return math.isfinite(v)
             if isinstance(v, dict):
                 return all(finite(x) for x in v.values())
             if isinstance(v, (list, tuple)):
                 return all(finite(x) for x in v)
-            return v is None or isinstance(v, (bool, int, str))
+            return isinstance(v, (bool, int, str))
 
         dropped = 0
 
@@ -167,10 +168,11 @@ class Store:
             return good
 
         # An option that is also a section of another ("general:col" and "general:col:active_border")
-        # can't be both a value and a table in the generated Lua.
+        # can't be both a value and a table in the generated Lua. Every option is in a section
+        # ("general:gaps_in"): one without (a hand-edited "gaps") has no place in hl.config.
         for opt in list(self.values):
             v = self.values[opt]
-            if (not isinstance(opt, str) or not finite(v)
+            if (not isinstance(opt, str) or ":" not in opt or not finite(v)
                     or any(other.startswith(opt + ":") for other in self.values if isinstance(other, str))):
                 del self.values[opt]
                 dropped += 1
@@ -402,15 +404,15 @@ class Store:
                 node = node.setdefault(p, {})
             node[parts[-1]] = val
         # Keep tab-group borders matching the window borders.
-        col = tree.get("general", {}).get("col", {})
-        if col:
+        col = tree.get("general", {}).get("col")
+        if isinstance(col, dict):
             group = tree.setdefault("group", {}).setdefault("col", {})
             if "active_border" in col:
                 group["border_active"] = col["active_border"]
             if "inactive_border" in col:
                 group["border_inactive"] = col["inactive_border"]
         for name, sub in tree.items():
-            section(f"settings: {name}", ["hl.config({", f"  {name} = {{"] + lua_table(sub, 2) + ["  },", "})"])
+            section(f"settings: {name}", ["hl.config({", f"  {lua_key(name)} = {{"] + lua_table(sub, 2) + ["  },", "})"])
 
         anim = self.render_animations()
         if anim:

@@ -133,8 +133,10 @@ Power and Bar, `hyprsunset.conf`, `colors.toml`, the pin hook, the notes widget'
 - Stock themes are never edited; color edits go to `~/.config/omarchy/themes`.
 - An unreadable settings.json is set aside, never replaced by the legacy file or silently wiped.
 - `Store._clean` drops every entry `render_lua` can't render (nulls, NaN/infinity, wrong types, an
-  option that is also another's section), and `_save` turns any render error into a toast: a
-  hand-edited settings.json must never stop the window from opening (it once did).
+  option that is also another's section, an option outside a section), and `_save` turns any
+  render error into a toast: a hand-edited settings.json must never stop the window from opening
+  (it once did), nor leave an entry that fails every save. A section name that isn't a Lua name
+  (`my-plugin`) is kept and written as a quoted key.
 - `omarchy toggle …` commands flip state: check the current state and only call them when it
   differs. `omarchy toggle bar off` *shows* the bar (it removes the bar-off flag).
 

@@ -418,12 +418,28 @@ def test_saves_are_atomic(make_store, monkeypatch):
     {"animations": {"factor": float("nan")}},
     {"animations": {"factor": 0}},
     {"cursor": {"size": float("inf")}},
+    # Found by tests/test_properties.py: each stopped every save (a crash or invalid Lua).
+    {"hyprland": {"gaps": 0}},
+    {"hyprland": {"general": None}},
+    {"hyprland": {"decoration:rounding": None}},
+    {"hyprland": {"general:col": 1}},
+    {"hyprland": {"my-plugin:x": 0}},
 ])
 def test_bad_entries_never_stop_the_app(make_store, data):
     st = make_store(data)
     lua = st.render_lua()
     assert luac_error(lua) is None
     assert "None" not in lua and "nan" not in lua.lower() and "inf" not in lua.replace("info", "")
+
+
+def test_hand_edited_options_are_kept_when_they_can_be_written(make_store):
+    """An option outside a section, or set to null, has nothing to write and is dropped; a section
+    whose name isn't a Lua name is written as a quoted key (Hyprland's own check then decides)."""
+    st = make_store({"hyprland": {"gaps": 0, "general:gaps_in": None, "my-plugin:x": 1, "general:col": 2}})
+    assert st.values == {"my-plugin:x": 1, "general:col": 2}
+    assert st.load_warning == "Ignored 2 unreadable entries in settings.json"
+    lua = st.render_lua()
+    assert '["my-plugin"] = {' in lua and "col = 2," in lua
 
 
 def test_a_renderer_error_is_reported_not_raised(make_store, monkeypatch):
