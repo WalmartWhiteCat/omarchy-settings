@@ -176,7 +176,7 @@ class ThemePage(Page):
             self.populate()
             self.win.theme_changed()
 
-        run_async(["omarchy", "theme", "install", url], done)
+        run_async(["omarchy", "theme", "install", url], done, timeout=600)  # a git clone
 
     def reset(self, done=None):
         self.win.store.pins = {k: None for k in ("color_scheme", "icon_theme")} | {

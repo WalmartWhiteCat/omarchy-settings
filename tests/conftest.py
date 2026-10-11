@@ -172,10 +172,10 @@ def sandbox(tmp_path, monkeypatch, request):
         calls.run.append(list(cmd))
         return False
 
-    def fake_run_async(cmd, done=None):
+    def fake_run_async(cmd, done=None, timeout=None):
         calls.run_async.append(list(cmd))
 
-    def fake_run_chain(cmds, done=None):
+    def fake_run_chain(cmds, done=None, timeout=None):
         calls.run_chain.append([list(c) for c in cmds])
 
     def fake_spawn(cmd):

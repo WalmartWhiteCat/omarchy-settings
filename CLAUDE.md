@@ -53,6 +53,8 @@ Omarchy's commands and files (the Pages table, "Design decisions") against the n
 - `omarchy-settings.py`: entry point. `osettings/__init__.py` pins the GI versions.
 - `core.py`: paths, process helpers (`run`, `run_async`, `run_chain`, `spawn_detached`, `trash_file`),
   `write_atomic` (one-step replace that writes through symlinks and keeps the file's mode),
+  background commands time out after `COMMAND_TIMEOUT` (120 s; `timeout=` to change it, e.g. 600
+  for a theme's git clone) and then count as failed, so nothing waits on a hung command,
   Lua escaping (`lua_str`/`lua_key`/`lua_value`/`lua_table`), shared widgets, `Page` base
   (`build()`, `rebuild()`, `reset(done)`).
 - `store.py`: `Store` holds everything the app owns (`settings.json`) and renders
@@ -98,7 +100,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 | Widgets | Desktop Notes (`notes`) | `NotesPage`, pages_widgets | `~/.config/desktop-notes/config.json`, read live by the widget | test_widgets |
 
 Other test files: `test_store.py` (loading, saving, the set-aside settings.json), `test_render.py`
-(the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_files.py` (`write_atomic`), `test_window.py` (the
+(the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_files.py` (`write_atomic`), `test_processes.py` (command timeouts), `test_window.py` (the
 real window and `--page`), `test_install.py` (install.sh). README's "Files it writes" table lists
 every file the app touches and how to undo it.
 

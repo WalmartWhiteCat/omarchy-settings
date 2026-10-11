@@ -51,33 +51,42 @@ def run_ok(cmd):
         return False
 
 
-def run_async(cmd, done=None):
+# Longest a background command may run. Past it, it counts as failed, so a hung command can't
+# leave a page waiting (or "Restore all" stopped part-way) for ever.
+COMMAND_TIMEOUT = 120
+
+
+def _run_bounded(cmd, timeout):
+    """(returncode, stdout, stderr); a missing program or a command past `timeout` is a failure."""
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout)
+        return p.returncode, p.stdout, p.stderr
+    except subprocess.TimeoutExpired:
+        return 1, "", f"{' '.join(cmd[:3])} didn't finish within {timeout} seconds"
+    except Exception as e:  # missing binary etc.
+        return 1, "", str(e)
+
+
+def run_async(cmd, done=None, timeout=COMMAND_TIMEOUT):
     """Run a command in a thread; call done(returncode, stdout, stderr) on the main loop."""
 
     def worker():
-        try:
-            p = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
-            result = (p.returncode, p.stdout, p.stderr)
-        except Exception as e:  # missing binary etc.
-            result = (1, "", str(e))
+        result = _run_bounded(cmd, timeout)
         if done:
             GLib.idle_add(lambda: done(*result) and False)
 
     threading.Thread(target=worker, daemon=True).start()
 
 
-def run_chain(cmds, done=None):
+def run_chain(cmds, done=None, timeout=COMMAND_TIMEOUT):
     """Run commands one after another in a thread; done(failures) gets the stderr of any that failed."""
 
     def worker():
         failures = []
         for cmd in cmds:
-            try:
-                p = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
-                if p.returncode != 0:
-                    failures.append(f"{' '.join(cmd[:3])}: {(p.stderr or p.stdout).strip()[:100]}")
-            except Exception as e:
-                failures.append(str(e))
+            code, out, err = _run_bounded(cmd, timeout)
+            if code != 0:
+                failures.append(f"{' '.join(cmd[:3])}: {(err or out).strip()[:100]}")
         if done:
             GLib.idle_add(lambda: done(failures) and False)
 

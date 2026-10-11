@@ -425,7 +425,7 @@ def test_rounding_change_refreshes_the_shell_style(make_store, monkeypatch):
     (theme / "shell.toml").write_text("[font]\nbase-size = 12\n")
     cmds = []
 
-    def run_async(cmd, done=None):  # finish at once, like hyprctl would
+    def run_async(cmd, done=None, timeout=None):  # finish at once, like hyprctl would
         cmds.append(cmd)
         if done:
             done(0, "", "")

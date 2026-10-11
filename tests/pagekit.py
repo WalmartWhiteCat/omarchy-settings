@@ -136,7 +136,7 @@ def open_page(sandbox, monkeypatch):
     # answer; answer them as a clean reload would. They're still recorded in sandbox.run_async.
     recorded = store_mod.run_async
 
-    def run_async(cmd, done=None):
+    def run_async(cmd, done=None, timeout=None):
         recorded(cmd, done)
         if done and cmd[:2] in (["hyprctl", "reload"], ["hyprctl", "configerrors"]):
             done(0, "no errors" if cmd[1] == "configerrors" else "ok", "")
@@ -179,11 +179,11 @@ def callbacks(monkeypatch, *modules):
     for mod in modules:
         old_async, old_chain = mod.run_async, mod.run_chain
 
-        def run_async(cmd, done=None, _old=old_async):
+        def run_async(cmd, done=None, timeout=None, _old=old_async):
             _old(cmd, done)
             got["async"].append((list(cmd), done))
 
-        def run_chain(cmds, done=None, _old=old_chain):
+        def run_chain(cmds, done=None, timeout=None, _old=old_chain):
             _old(cmds, done)
             got["chain"].append(([list(c) for c in cmds], done))
 
