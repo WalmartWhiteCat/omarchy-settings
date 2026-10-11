@@ -188,7 +188,8 @@ class Store:
         b = self.binds
         b["disabled"] = keep(b["disabled"], lambda k: isinstance(k, str))
         b["rebinds"] = keep(b["rebinds"], lambda r: isinstance(r, dict) and all(
-            isinstance(r.get(k), str) for k in ("old", "new", "line")))
+            isinstance(r.get(k), str) for k in ("old", "new", "line"))
+            and (r.get("guard") is None or isinstance(r["guard"], str)))
         b["custom"] = keep(b["custom"], lambda c: isinstance(c, dict) and isinstance(c.get("keys"), str)
                            and isinstance(c.get("command"), str))
         for name in list(self.monitors):
