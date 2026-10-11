@@ -4,7 +4,7 @@ import json
 
 from gi.repository import Adw, GLib
 
-from .core import HOME, Page, combo_row, read_json, reset_group, scale_row, write_atomic
+from .core import HOME, Page, combo_row, read_json, reset_group, scale_row, switch_row, write_atomic
 
 # The widget (~/.config/omarchy/plugins/sourced.desktop-notes) watches this file and applies changes
 # live. It lives outside the plugin folder because saving there reloads the plugin.
@@ -12,7 +12,7 @@ NOTES_CONFIG = HOME / ".config/desktop-notes/config.json"
 NOTES_PLUGIN = HOME / ".config/omarchy/plugins/sourced.desktop-notes"
 
 NOTES_DEFAULTS = {"opacity": 78, "width": 300, "textScale": 100, "position": "bottom-right",
-                  "marginX": 32, "marginY": 32, "title": "Reminders"}
+                  "marginX": 32, "marginY": 32, "title": "Reminders", "alwaysShowBells": False}
 # key -> (lowest, highest); the widget clamps to the same ranges for hand-edited files.
 NOTES_LIMITS = {"opacity": (0, 100), "width": (200, 800), "textScale": (70, 200),
                 "marginX": (0, 1000), "marginY": (0, 1000)}
@@ -37,6 +37,8 @@ def read_notes_config():
         cfg["position"] = data["position"]
     if isinstance(data.get("title"), str):
         cfg["title"] = data["title"].strip()[:NOTES_TITLE_MAX]
+    if isinstance(data.get("alwaysShowBells"), bool):
+        cfg["alwaysShowBells"] = data["alwaysShowBells"]
     return cfg
 
 
@@ -76,6 +78,9 @@ class NotesPage(Page):
                         lambda v: self.set("width", v)))
         g.add(scale_row("Text size", "Percent of the shell's normal size", *NOTES_LIMITS["textScale"], 5,
                         self.cfg["textScale"], 0, lambda v: self.set("textScale", v)))
+        g.add(switch_row("Always show reminder bells", "Otherwise a note's bell shows when you point at it, "
+                         "or while it has a reminder", self.cfg["alwaysShowBells"],
+                         lambda on: self.set_now("alwaysShowBells", on)))
         self.add(g)
 
         g = Adw.PreferencesGroup(title="Location")
@@ -92,7 +97,7 @@ class NotesPage(Page):
 
         self.add(reset_group(self.win, "Restore default Desktop Notes settings?",
                              "Titled Reminders, 78% background opacity, 300 px wide, normal text size, bottom "
-                             "right, 32 px from the edges. Your notes are kept.", self.reset))
+                             "right, 32 px from the edges, bells shown on hover. Your notes are kept.", self.reset))
 
     def set(self, key, value):
         self.cfg[key] = value

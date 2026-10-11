@@ -164,3 +164,20 @@ def test_title_field_saves_it(open_page):
     assert written()["title"] == "Todo"
     p.enter("Title", "")
     assert written()["title"] == ""
+
+
+def test_always_show_bells_is_read_only_as_a_switch():
+    pw.NOTES_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    pw.NOTES_CONFIG.write_text(json.dumps({"alwaysShowBells": True}))
+    assert pw.read_notes_config()["alwaysShowBells"] is True
+    pw.NOTES_CONFIG.write_text(json.dumps({"alwaysShowBells": "yes"}))
+    assert pw.read_notes_config()["alwaysShowBells"] is False
+
+
+@needs_display
+def test_always_show_bells_switch_saves_it(open_page):
+    p = open_page("notes")
+    p.switch("Always show reminder bells", True)
+    assert written()["alwaysShowBells"] is True
+    p.switch("Always show reminder bells", False)
+    assert written()["alwaysShowBells"] is False
