@@ -110,3 +110,17 @@ def test_a_damaged_rule_in_settings_still_opens_the_app(open_page):
         {"class": "kitty", "float": True}]})
     assert p.has_row("kitty") and not p.has_row("foot")
     assert any("Ignored 1 unreadable entry" in t for t in p.toasts)
+
+
+def test_a_named_workspace_shows_and_is_kept(open_page):
+    """The generated Lua supports a named workspace (e.g. "special:steam", set by hand), but the page
+    assumed a number and failed to build."""
+    p = open_page("rules", {"rules": [{"class": "steam", "enabled": True, "workspace": "special:steam"}]})
+    row = rule_row(p, "steam")
+    assert row.get_subtitle() == "workspace special:steam"
+    ws = p.row("Open on workspace", Adw.SpinRow)
+    assert ws.get_value() == 0 and "special:steam" in ws.get_subtitle()
+    p.switch("Always float", True)
+    assert p.store.rules[0]["workspace"] == "special:steam"  # untouched until a number is chosen
+    p.number("Open on workspace", 4)
+    assert p.store.rules[0]["workspace"] == 4

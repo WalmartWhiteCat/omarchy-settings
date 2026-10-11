@@ -727,9 +727,11 @@ class RulesPage(Page):
             bits.append("floats")
         if r.get("no_blur"):
             bits.append("no blur")
-        if r.get("workspace"):
-            bits.append(f"workspace {int(r['workspace'])}")
-        return ", ".join(bits) or "No changes yet"
+        ws = r.get("workspace")
+        if ws:
+            # A number from this page, or a name set by hand (e.g. "special:steam")
+            bits.append(f"workspace {int(ws) if isinstance(ws, (int, float)) else ws}")
+        return GLib.markup_escape_text(", ".join(bits)) or "No changes yet"
 
     def rule_row(self, r):
         store = self.win.store
@@ -760,8 +762,13 @@ class RulesPage(Page):
         exp.add_row(switch_row("Turn off blur", None, r.get("no_blur"), lambda v: changed("no_blur", v or None)))
         ws = Adw.SpinRow.new_with_range(0, 10, 1)
         ws.set_title("Open on workspace")
-        ws.set_subtitle("0 = wherever it is launched")
-        ws.set_value(r.get("workspace") or 0)
+        current = r.get("workspace")
+        if current and not isinstance(current, (int, float)):
+            ws.set_subtitle(GLib.markup_escape_text(f"Now “{current}”, set by hand; choosing a number replaces it"))
+            ws.set_value(0)
+        else:
+            ws.set_subtitle("0 = wherever it is launched")
+            ws.set_value(current or 0)
         ws.connect("notify::value", lambda s, _p: changed("workspace", int(s.get_value()) or None))
         exp.add_row(ws)
         remove = Adw.ButtonRow(title="Remove rule", start_icon_name="user-trash-symbolic")
