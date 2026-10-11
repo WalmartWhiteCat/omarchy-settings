@@ -93,7 +93,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 | | Cursor (`cursor`) | `CursorPage`, pages_system | `store.cursor` into the Lua, gsettings, `hyprctl setcursor` | test_page_cursor |
 | Input | Keyboard and Mouse (`input`) | `InputPage`, pages_system | `store.values` (`input:...` options) into the Lua; `omarchy toggle touchpad` | test_page_input |
 | | Keybindings (`keys`) | `KeysPage`, pages_keys | `store.binds` (rebinds, unbinds, custom) into the Lua; parsing in `binds.py` | test_keybinding_fixes, test_review_fixes, test_binds |
-| System | Bar (`bar`) | `BarPage`, pages_system | `omarchy bar ...`, `omarchy plugin enable/disable`; `shell.json` only for removing the menu/media widget | test_review_fixes |
+| System | Bar (`bar`) | `BarPage`, pages_system | `omarchy bar ...`, `omarchy plugin enable/disable`; `shell.json` only for removing the menu/media widget | test_page_bar, test_review_fixes |
 | | Power and Notifications (`power`) | `PowerPage`, pages_system | `omarchy toggle ...`; idle times written straight to `shell.json` (`idle.screensaver`, `idle.lock`, in seconds; read by Omarchy's idle service, `shell/plugins/services/idle/Service.qml`); Do Not Disturb via `omarchy-shell notifications` | test_page_power, test_review_fixes |
 | | Default Apps (`apps`) | `AppsPage`, pages_system | `omarchy default ...` | test_page_apps |
 | | Autostart (`autostart`) | `AutostartPage`, pages_keys | `store.autostart` into the Lua | test_page_autostart |

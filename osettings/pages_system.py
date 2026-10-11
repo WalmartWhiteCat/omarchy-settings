@@ -901,7 +901,8 @@ class BarPage(Page):
                 group_add(g, Adw.ActionRow(title="Empty"))
             for idx, wid in enumerate(items):
                 on_bar.add(wid)
-                row = Adw.ActionRow(title=catalog.get(wid, {}).get("name", wid), subtitle=wid)
+                row = Adw.ActionRow(title=GLib.markup_escape_text(str(catalog.get(wid, {}).get("name", wid))),
+                                    subtitle=GLib.markup_escape_text(str(wid)))
                 box = Gtk.Box(spacing=2, valign=Gtk.Align.CENTER)
                 up = icon_button("go-up-symbolic", "Move up",
                                  lambda w=wid, s=sec, i=idx: self.move(w, s, i - 1))
