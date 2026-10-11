@@ -11,6 +11,7 @@ import json
 import pytest
 from gi.repository import Adw, Gio, GLib, Gtk
 
+from osettings import pages_keys
 from osettings import store as store_mod
 from osettings import window
 
@@ -199,6 +200,25 @@ def last_async(sandbox, prefix):
     """The last run_async command starting with `prefix`, or None."""
     matches = [c for c in sandbox.run_async if c[:len(prefix)] == list(prefix)]
     return matches[-1] if matches else None
+
+
+class FakeApp:
+    """Stands in for a Gio.AppInfo: just the id and name the app pickers use."""
+
+    def __init__(self, app_id, name):
+        self.app_id, self.name = app_id, name
+
+    def get_id(self):
+        return self.app_id
+
+    def get_display_name(self):
+        return self.name
+
+
+def installed_apps(monkeypatch, *pairs):
+    """Make the app pickers (Autostart, the shortcut dialog) list these (desktop id, name) pairs
+    instead of the apps installed on this machine."""
+    monkeypatch.setattr(pages_keys, "app_choices", lambda: [FakeApp(i, n) for i, n in pairs])
 
 
 def callbacks(monkeypatch, *modules):

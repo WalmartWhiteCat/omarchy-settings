@@ -214,7 +214,8 @@ Kinds of tests:
   save; `saved()` is settings.json, `lua()` the generated file; `toasts` collects toasts and busy
   messages; `page` is looked up each time because pages rebuild themselves. `callbacks(monkeypatch,
   module)` records each run_async/run_chain's done callback so a test can finish a command as if it
-  exited (pass `(code, out, err)` or a failures list). pagekit answers `hyprctl reload` /
+  exited (pass `(code, out, err)` or a failures list). `installed_apps(monkeypatch, (id, name)...)` makes
+  the app pickers (Autostart, the shortcut dialog) list those apps instead of the machine's. pagekit answers `hyprctl reload` /
   `configerrors` as a clean reload, so a save's "after" callbacks run. Commands' stub output comes
   from `sandbox.run_output[(cmd...)]`; use the real program's output format (read the script in
   /usr/share/omarchy/bin rather than guess). A GTK grid's selection follows keyboard focus, so

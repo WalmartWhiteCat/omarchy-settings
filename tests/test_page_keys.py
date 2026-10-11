@@ -3,17 +3,14 @@ test_keybinding_fixes, test_review_fixes and test_binds."""
 
 from gi.repository import Adw
 
-from osettings import pages_keys as pk
-
-from .pagekit import needs_display, open_page, widgets  # noqa: F401
-from .test_page_autostart import apps
+from .pagekit import installed_apps, needs_display, open_page, widgets  # noqa: F401
 
 pytestmark = needs_display
 
 
 def test_search_apps_in_the_new_shortcut_dialog(open_page, monkeypatch):
     """Typing in "Open an app"'s search field did nothing: it had no expression to match on."""
-    apps(monkeypatch, ("firefox.desktop", "Firefox"), ("nautilus.desktop", "Files"), ("kitty.desktop", "Kitty"))
+    installed_apps(monkeypatch, ("firefox.desktop", "Firefox"), ("nautilus.desktop", "Files"), ("kitty.desktop", "Kitty"))
     p = open_page("keys")
     p.page.add_custom()
     dialog = p.win.get_visible_dialog()
