@@ -1,6 +1,7 @@
 """Background page, built for real (see pagekit): the theme's wallpapers and the user's own, which
 one is current, setting one, adding images (copies, name clashes, files that can't be copied),
-moving one to the Trash (and not leaving the desktop on a deleted file), and Restore defaults.
+moving one or several to the Trash (and not leaving the desktop on a deleted file), and Restore
+defaults.
 Older stand-in tests are in test_review_fixes."""
 
 import os
@@ -186,6 +187,87 @@ def test_a_failed_trash_keeps_the_file_and_says_why(sandbox, open_page, monkeypa
     answer(p, "ok")
     assert (user / "a.png").exists()
     assert p.toasts[-1] == "Couldn't move a.png to the Trash: permission denied"
+
+
+def bulk(p):
+    """Open the "Move several" dialog; returns it and its rows by file name ("Select all" first)."""
+    p.click("Move several to the Trash…")
+    d = p.win.get_visible_dialog()
+    assert isinstance(d, Adw.AlertDialog), "no dialog open"
+    rows = {r.get_title(): r for r in widgets(d.get_extra_child()) if isinstance(r, Adw.ActionRow)}
+    return d, rows
+
+
+def tick(row):
+    next(w for w in widgets(row) if isinstance(w, Gtk.CheckButton)).set_active(True)
+
+
+def test_several_only_lists_mine_and_needs_one_ticked(sandbox, open_page):
+    theme(mine=("a.png", "b.png"))
+    p = open_page("background")
+    d, rows = bulk(p)
+    assert list(rows) == ["Select all", "a.png", "b.png"]  # never the theme's own
+    assert not d.get_response_enabled("ok")
+    tick(rows["b.png"])
+    assert d.get_response_enabled("ok") and d.get_response_label("ok") == "Move 1 to Trash"
+    answer(p, "cancel")
+    assert sandbox.trash == []
+
+
+def test_several_move_together(sandbox, open_page):
+    user = theme(mine=("a.png", "b.png", "c.png"), current="1-stock.png")
+    p = open_page("background")
+    _d, rows = bulk(p)
+    tick(rows["a.png"])
+    tick(rows["c.png"])
+    answer(p, "ok")
+    assert sandbox.trash == [str(user / "a.png"), str(user / "c.png")]
+    assert p.toasts[-1] == "Moved 2 backgrounds to the Trash"
+    assert bg_sets(sandbox) == []
+
+
+def test_select_all_ticks_every_one(sandbox, open_page):
+    user = theme(mine=("a.png", "b.png"))
+    p = open_page("background")
+    d, rows = bulk(p)
+    tick(rows["Select all"])
+    assert d.get_response_label("ok") == "Move 2 to Trash"
+    answer(p, "ok")
+    assert sandbox.trash == [str(user / "a.png"), str(user / "b.png")]
+
+
+def test_several_including_the_current_one_switch_to_what_is_left(sandbox, open_page):
+    user = theme(mine=("a.png", "b.png", "c.png"), current="b.png")
+    p = open_page("background")
+    _d, rows = bulk(p)
+    tick(rows["a.png"])
+    tick(rows["b.png"])
+    answer(p, "ok")
+    assert bg_sets(sandbox) == [str(user / "c.png")]
+    assert p.toasts[-1] == "Moved 2 backgrounds to the Trash; switched to c.png"
+
+
+def test_several_that_fail_are_named_and_the_rest_still_go(sandbox, open_page, monkeypatch):
+    user = theme(mine=("a.png", "b.png", "c.png"), current="c.png")
+    real = pl.trash_file
+    monkeypatch.setattr(pl, "trash_file", lambda path: "permission denied" if path.name != "c.png" else real(path))
+    p = open_page("background")
+    _d, rows = bulk(p)
+    tick(rows["Select all"])
+    answer(p, "ok")
+    assert (user / "a.png").exists() and (user / "b.png").exists()
+    assert "Couldn't move a.png, b.png to the Trash: permission denied" in p.toasts
+    assert bg_sets(sandbox) == [str(user / "a.png")]  # the current one went, so don't point at it
+    assert p.toasts[-1] == "Moved to the Trash; switched to a.png"
+
+
+def test_the_several_button_shows_only_with_backgrounds_of_my_own(open_page):
+    theme()
+    p = open_page("background")
+    assert not p.page.bulk.get_visible()
+    theme(stock=(), mine=("a.png",))
+    p.page.populate()
+    assert p.page.bulk.get_visible()
 
 
 def test_restore_defaults_sets_the_first_stock_wallpaper(sandbox, open_page, monkeypatch):

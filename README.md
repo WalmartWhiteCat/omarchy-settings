@@ -83,7 +83,7 @@ like Omarchy's own menus. Everything else goes into files it owns, or small, bac
 | `~/.config/omarchy/shell.json` | Idle times; removing the Omarchy menu or media widget from the bar (other bar changes go through `omarchy bar`) | Restore defaults on the page |
 | `~/.config/omarchy/themes/<theme>/colors.toml` | Edited theme colors. Stock themes get a separate copy (marked with `.omarchy-settings-overlay`); your own themes are edited in place (original kept as `colors.toml.omarchy-settings-original`) | Theme Colors → Restore defaults |
 | `~/.config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins` | Re-applies app style, icons and interface font you chose to keep after each theme change | Set them back to "Follow theme" |
-| `~/.config/omarchy/backgrounds/<theme>/` | Backgrounds you add; removing one moves it to the Trash | — |
+| `~/.config/omarchy/backgrounds/<theme>/` | Backgrounds you add; removing one (or several at once) moves it to the Trash | — |
 | `~/.config/desktop-notes/config.json` | Desktop Notes widget's title, background opacity, width, text size, outline, bells, click speed, monitor and position; the widget applies changes live. Notes themselves stay in `~/.local/state/desktop-notes/notes.json` | Widgets → Desktop Notes → Restore defaults |
 | GNOME settings (`gsettings`) | Cursor theme and size, light/dark style, icon theme, interface font | Restore defaults on the page |
 

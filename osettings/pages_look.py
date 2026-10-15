@@ -352,7 +352,11 @@ class BackgroundPage(Page):
 
     def build(self):
         self.group = Adw.PreferencesGroup(title="Background")
-        self.group.set_header_suffix(icon_button("list-add-symbolic", "Add images…", self.on_add))
+        buttons = Gtk.Box(spacing=6)
+        self.bulk = icon_button("selection-mode-symbolic", "Move several to the Trash…", self.choose_remove)
+        buttons.append(self.bulk)
+        buttons.append(icon_button("list-add-symbolic", "Add images…", self.on_add))
+        self.group.set_header_suffix(buttons)
         self.flow = flowbox()
         self.flow.connect("child-activated", self.on_activate)
         self.group.add(self.flow)
@@ -370,10 +374,11 @@ class BackgroundPage(Page):
             self.flow.remove(c)
         self.group.set_description(f"Wallpapers for the current theme ({current_theme_slug()}). "
                                    "Use + to add your own; ones you added have a button to move them to the "
-                                   "Trash.")
+                                   "Trash, and the select button moves several at once.")
         link = STATE / "current/background"
         current = os.path.realpath(link) if link.exists() else ""
         mine = self.user_dir()
+        self.bulk.set_visible(bool(images_in(mine)))
         for img in images_in(mine, STATE / "current/theme/backgrounds"):
             pic = thumb()
             overlay = Gtk.Overlay(child=pic)
@@ -397,23 +402,104 @@ class BackgroundPage(Page):
                 f"{img.name} is removed from this theme's backgrounds. You can get it back from the Trash.",
                 lambda: self.remove(img), label="Move to Trash")
 
-    def remove(self, img):
-        link = STATE / "current/background"
-        was_current = link.exists() and os.path.realpath(link) == os.path.realpath(img)
-        err = trash_file(img)
-        if err:
-            self.win.toast(f"Couldn't move {img.name} to the Trash: {err}")
+    def choose_remove(self):
+        """Pick several of the user's own backgrounds and move them to the Trash in one go."""
+        mine = images_in(self.user_dir())
+        if not mine:
             return
-        if was_current:
+        dialog = Adw.AlertDialog(heading="Move backgrounds to the Trash?",
+                                 body="Tick the ones you added that should go. You can get them back from "
+                                      "the Trash. The theme's own backgrounds aren't listed.")
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("ok", "Move to Trash")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_response_enabled("ok", False)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        checks = {}
+        everything = Gtk.CheckButton(valign=Gtk.Align.CENTER)
+        all_row = Adw.ActionRow(title="Select all", activatable_widget=everything)
+        all_row.add_prefix(everything)
+        listbox.append(all_row)
+        syncing = False
+
+        def changed(*_):
+            nonlocal syncing
+            ticked = [img for img, c in checks.items() if c.get_active()]
+            dialog.set_response_enabled("ok", bool(ticked))
+            dialog.set_response_label("ok", f"Move {len(ticked)} to Trash" if ticked else "Move to Trash")
+            if not syncing:  # ticking the last one by hand ticks "Select all" without re-ticking the rest
+                syncing = True
+                everything.set_active(len(ticked) == len(checks))
+                syncing = False
+
+        def tick_all(_c):
+            nonlocal syncing
+            if not syncing:
+                syncing, on = True, everything.get_active()
+                for c in checks.values():
+                    c.set_active(on)
+                syncing = False
+
+        everything.connect("toggled", tick_all)
+        for img in mine:
+            check = Gtk.CheckButton(valign=Gtk.Align.CENTER)
+            check.connect("toggled", changed)
+            pic = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True, valign=Gtk.Align.CENTER)
+            pic.set_size_request(64, 36)
+            pic.add_css_class("card")
+            pic.set_overflow(Gtk.Overflow.HIDDEN)
+            row = Adw.ActionRow(title=GLib.markup_escape_text(img.name), activatable_widget=check)
+            row.add_prefix(check)
+            row.add_suffix(pic)
+            listbox.append(row)
+            checks[img] = check
+            load_texture_async(img, 128, 72, lambda t, p=pic: t and p.set_paintable(t))
+        dialog.set_extra_child(Gtk.ScrolledWindow(child=listbox, propagate_natural_height=True,
+                                                  max_content_height=360,
+                                                  hscrollbar_policy=Gtk.PolicyType.NEVER))
+
+        def respond(_d, r):
+            if r == "ok":
+                self.remove_many([img for img, c in checks.items() if c.get_active()])
+
+        dialog.connect("response", respond)
+        dialog.present(self.win)
+        return dialog
+
+    def remove(self, img):
+        self.remove_many([img])
+
+    def remove_many(self, imgs):
+        link = STATE / "current/background"
+        current = os.path.realpath(link) if link.exists() else None
+        moved, failed = [], []
+        for img in imgs:
+            err = trash_file(img)
+            if err:
+                failed.append((img, err))
+            else:
+                moved.append(img)
+        if failed:
+            # Name each file that stayed; one reason is enough when they all failed the same way.
+            reasons = {err for _i, err in failed}
+            names = ", ".join(i.name for i, _e in failed)
+            why = reasons.pop() if len(reasons) == 1 else "; ".join(f"{i.name}: {e}" for i, e in failed)
+            self.win.toast(f"Couldn't move {names} to the Trash: {why}"[:200])
+        if current and any(os.path.realpath(i) == current for i in moved):
             # Don't leave the desktop pointing at a file that's gone.
+            what = "Moved to the Trash" if len(moved) == 1 else f"Moved {len(moved)} backgrounds to the Trash"
             remaining = images_in(self.user_dir(), STATE / "current/theme/backgrounds")
             if remaining:
                 run_async(["omarchy", "theme", "bg", "set", str(remaining[0])], lambda *_: self.populate())
-                self.win.toast(f"Moved to the Trash; switched to {remaining[0].name}")
+                self.win.toast(f"{what}; switched to {remaining[0].name}")
             else:
-                self.win.toast("Moved to the Trash. This theme has no other backgrounds.")
-        else:
-            self.win.toast(f"Moved {img.name} to the Trash")
+                self.win.toast(f"{what}. This theme has no other backgrounds.")
+        elif moved and not failed:
+            self.win.toast(f"Moved {moved[0].name if len(moved) == 1 else f'{len(moved)} backgrounds'} to the Trash")
         self.populate()
 
     def on_activate(self, _flow, child):
