@@ -12,8 +12,6 @@ Covered by tests with stand-ins, but never clicked through live:
   presses).
 - **Night light:** turning it on from hyprsunset's neutral state (after a restart or the schedule's end).
 - **Windows:** the "Omarchy's subtle transparency" switch making windows fully opaque.
-- **Background:** moving a background to the Trash (the confirmation and the real Trash), and
-  the "Move several" dialog's look (thumbnails, scrolling with many backgrounds).
 - **Bar:** removing the Omarchy menu widget from the layout (assumes the bar shows only what's in
   its layout; if Omarchy re-adds enabled widgets, it would come back, harmlessly).
 - **Keyboard:** a non-Latin layout keeping shortcuts working.
