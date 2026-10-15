@@ -211,11 +211,17 @@ def current_theme_slug():
         return ""
 
 
+def natural_key(name):
+    """Sort key that orders numbers by value, so 2.png comes before 10.png, and ignores case."""
+    return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", name)], name
+
+
 def images_in(*dirs):
     out = []
     for d in dirs:
         if d.is_dir():
-            out += sorted(p for p in d.iterdir() if p.suffix.lower() in IMAGE_EXTS and p.is_file())
+            out += sorted((p for p in d.iterdir() if p.suffix.lower() in IMAGE_EXTS and p.is_file()),
+                          key=lambda p: natural_key(p.name))
     return out
 
 

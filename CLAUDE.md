@@ -89,7 +89,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 |---|---|---|---|---|
 | Appearance | Theme (`theme`) | `ThemePage`, pages_look | `omarchy theme set/install`; "keep" pins re-applied by the theme-set hook | test_page_theme |
 | | Theme Colors (`colors`) | `ColorsPage`, pages_look | edits `colors.toml` (overlay copy for stock themes), then `omarchy theme set` | test_page_colors, test_display_colors |
-| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/`, moved to the Trash one at a time or several at once (`choose_remove`), then switching to another if the current one went | test_page_background, test_review_fixes |
+| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/`, moved to the Trash one at a time or several at once (`choose_remove`), then switching to another if the current one went; the grid orders numbers by value (`natural_key`: 2.png before 10.png), unlike Omarchy's `omarchy-theme-bg-next`, which cycles in plain text order | test_page_background, test_review_fixes |
 | | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | test_page_windows |
 | | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | test_page_rules |
 | Display | Displays (`displays`) | `DisplaysPage`, pages_system | trial with `hyprctl eval` + watchdog; Keep saves `store.monitors` into the Lua; Restore defaults edits `monitors.lua` | test_page_displays, test_review_fixes |

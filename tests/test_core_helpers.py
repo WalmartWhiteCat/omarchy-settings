@@ -193,6 +193,13 @@ def test_images_are_only_image_files(tmp_path):
     assert [p.name for p in core.images_in(d, tmp_path / "missing")] == ["a.png", "b.JPG", "c.webp"]
 
 
+
+def test_images_sort_numbers_by_value(tmp_path):
+    for name in ("10.png", "2.png", "1.png", "Beach 3.png", "beach 12.png", "01.png"):
+        (tmp_path / name).write_text("x")
+    assert [p.name for p in core.images_in(tmp_path)] == [
+        "01.png", "1.png", "2.png", "10.png", "Beach 3.png", "beach 12.png"]
+
 def test_theme_preview_prefers_a_preview_then_a_background(monkeypatch, tmp_path):
     user, stock = tmp_path / "user", tmp_path / "stock"
     monkeypatch.setattr(core, "USER_THEMES", user)
