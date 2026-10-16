@@ -26,6 +26,8 @@ HYPR_DIR = HOME / ".config/hypr"
 SHELL_JSON = HOME / ".config/omarchy/shell.json"
 USER_THEMES = HOME / ".config/omarchy/themes"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+# The ones the Live Wallpaper plugin plays (its is_video), for video backgrounds.
+VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".mov", ".m4v"}
 
 # Omarchy's out-of-the-box values, used by the "Restore defaults" buttons.
 DEFAULT_THEME = "Tokyo Night"
@@ -216,11 +218,13 @@ def natural_key(name):
     return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", name)], name
 
 
-def images_in(*dirs):
+def images_in(*dirs, videos=False):
+    """Each folder's images (and videos, if asked), in natural order, folder by folder."""
+    exts = IMAGE_EXTS | VIDEO_EXTS if videos else IMAGE_EXTS
     out = []
     for d in dirs:
         if d.is_dir():
-            out += sorted((p for p in d.iterdir() if p.suffix.lower() in IMAGE_EXTS and p.is_file()),
+            out += sorted((p for p in d.iterdir() if p.suffix.lower() in exts and p.is_file()),
                           key=lambda p: natural_key(p.name))
     return out
 

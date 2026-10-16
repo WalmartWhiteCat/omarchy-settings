@@ -1,10 +1,13 @@
 """Background page, built for real (see pagekit): the theme's wallpapers and the user's own, which
 one is current, setting one, adding images (copies, name clashes, files that can't be copied),
-moving one or several to the Trash (and not leaving the desktop on a deleted file), and Restore
-defaults.
+moving one or several to the Trash (and not leaving the desktop on a deleted file), Restore
+defaults, and videos played through the Live Wallpaper plugin.
 Older stand-in tests are in test_review_fixes."""
 
+import hashlib
+import json
 import os
+from pathlib import Path
 
 from gi.repository import Adw, Gio, Gtk
 
@@ -289,3 +292,199 @@ def test_restore_defaults_without_stock_wallpapers(sandbox, open_page):
     answer(p, "ok")
     assert bg_sets(sandbox) == []
     assert p.toasts[-1] == "This theme has no stock backgrounds"
+
+
+# ---------------------------------------------------------------- videos (Live Wallpaper plugin)
+
+PLUGINS = ("omarchy", "plugin", "list", "--json")
+
+
+def plugin(sandbox, enabled=True):
+    sandbox.run_output[PLUGINS] = json.dumps([{"id": "tenzin.live-wallpaper", "kinds": ["service"],
+                                               "enabled": enabled, "active": False}])
+
+
+def plugin_poster(video):
+    """The plugin's own thumbnail_for name, worked out the way its script does."""
+    st = os.stat(video)
+    key = f"ffmpeg-v2:{video}:{st.st_size}:{int(st.st_mtime)}"
+    return pl.HOME / ".cache/omarchy/live-wallpaper" / f"{hashlib.md5(key.encode()).hexdigest()}.jpg"
+
+
+def ffmpegs(got):
+    return [(cmd, done) for cmd, done in got["async"] if cmd[0] == "ffmpeg"]
+
+
+def grab_frame(got, ok=True):
+    """Finish the last ffmpeg as if it ran: write its output (or not) and report."""
+    cmd, done = ffmpegs(got)[-1]
+    if ok:
+        Path(cmd[-1]).write_bytes(PNG)
+    done(0 if ok else 1, "", "" if ok else "Invalid data found when processing input")
+    spin()
+
+
+def live_state(name):
+    f = pl.STATE / "live-wallpaper" / name
+    return f.read_text().strip() if f.exists() else None
+
+
+def test_videos_are_listed_only_while_the_plugin_is_on(sandbox, open_page):
+    theme(mine=("a.png", "clip.mp4"))
+    p = open_page("background")
+    assert names(p) == ["a.png", "1-stock.png", "2-stock.jpg"]
+    plugin(sandbox, enabled=False)
+    p.page.populate()
+    assert "clip.mp4" not in names(p)
+    plugin(sandbox)
+    p.page.populate()
+    assert names(p) == ["a.png", "clip.mp4", "1-stock.png", "2-stock.jpg"]
+    badges = {c.path.name for c in tiles(p) if any(isinstance(w, Gtk.Image) and w.get_tooltip_text() == "Video"
+                                                     for w in widgets(c))}
+    assert badges == {"clip.mp4"}
+    assert "Live Wallpaper" in p.page.group.get_description()
+
+
+def test_the_add_dialog_offers_videos_only_while_the_plugin_is_on(sandbox, open_page, monkeypatch):
+    theme()
+    seen = []
+
+    class Dialog:
+        def __init__(self, **_kw):
+            pass
+
+        def set_filters(self, filters):
+            seen.append(filters.get_item(0))
+
+        def open_multiple(self, *_a):
+            pass
+
+    monkeypatch.setattr(pl.Gtk, "FileDialog", Dialog)
+    p = open_page("background")
+    p.page.on_add()
+    plugin(sandbox)
+    p.page.populate()
+    p.page.on_add()
+    images, both = seen
+    assert images.get_name() == "Images" and both.get_name() == "Images and videos"
+    for name, want in (("clip.mp4", (False, True)), ("clip.MKV", (False, True)), ("a.webm", (False, True))):
+        info = Gio.FileInfo()
+        info.set_display_name(name)
+        assert (images.match(info), both.match(info)) == want, name
+    assert p.page.add_button.get_tooltip_text() == "Add images or videos…"
+
+
+def test_choosing_a_video_plays_it_through_the_plugin(sandbox, open_page, monkeypatch):
+    user = theme(mine=("clip.mp4",), current="1-stock.png")
+    plugin(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    grab_frame(got)  # the tile's thumbnail
+    poster = plugin_poster(user / "clip.mp4")
+    assert poster.is_file()  # shared with the plugin's own picker
+    flow(p).emit("child-activated", tile(p, "clip.mp4"))
+    spin()
+    assert len(ffmpegs(got)) == 1  # the frame is made once
+    assert bg_sets(sandbox) == []
+    # The plugin's state, as its picker writes it, before the poster is set.
+    assert live_state("video") == str(user / "clip.mp4")
+    assert live_state("poster") == live_state("expected") == str(poster)
+    assert live_state("fallback") == str(pl.STATE / "current/theme/backgrounds/1-stock.png")
+    assert oct((pl.STATE / "live-wallpaper").stat().st_mode & 0o777) == "0o700"
+    assert oct((pl.STATE / "live-wallpaper/video").stat().st_mode & 0o777) == "0o600"
+    cmds, done = got["chain"][-1]
+    assert cmds == [["omarchy", "theme", "bg", "set", str(poster)],
+                    ["omarchy-shell", "-q", "tenzin.live-wallpaper", "play", str(user / "clip.mp4"), "420"]]
+    # The poster is now the background, so the page marks the video as the current one.
+    (pl.STATE / "current/background").unlink()
+    (pl.STATE / "current/background").symlink_to(poster)
+    done([])
+    spin()
+    assert p.toasts[-1] == "Background updated"
+    assert [c.path.name for c in flow(p).get_selected_children()] == ["clip.mp4"]
+
+
+def test_a_video_that_wont_play_says_to_restart_the_shell(sandbox, open_page, monkeypatch):
+    theme(mine=("clip.mp4",))
+    plugin(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    grab_frame(got)
+    flow(p).emit("child-activated", tile(p, "clip.mp4"))
+    spin()
+    got["chain"][-1][1](["omarchy-shell -q tenzin.live-wallpaper: no target"])
+    spin()
+    assert "omarchy-restart-shell" in p.toasts[-1]
+
+
+def test_a_file_that_isnt_a_video_is_refused(sandbox, open_page, monkeypatch):
+    user = theme(mine=("clip.mp4",))
+    plugin(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    grab_frame(got, ok=False)
+    flow(p).emit("child-activated", tile(p, "clip.mp4"))
+    spin()
+    grab_frame(got, ok=False)
+    assert p.toasts[-1] == "Couldn't read clip.mp4 as a video"
+    assert got["chain"] == [] and live_state("video") is None
+    assert [f.name for f in plugin_poster(user / "clip.mp4").parent.iterdir()] == []  # no half-made frames
+
+
+def test_a_video_too_big_for_the_plugin_is_refused(sandbox, open_page, monkeypatch):
+    user = theme(mine=("huge.mp4",))
+    os.truncate(user / "huge.mp4", pl.LIVE_WALLPAPER_MAX_BYTES + 1)  # sparse: takes no space
+    plugin(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    flow(p).emit("child-activated", tile(p, "huge.mp4"))
+    spin()
+    assert p.toasts[-1] == "huge.mp4 is too big for Live Wallpaper (500 MB at most)"
+    assert got["chain"] == []
+
+
+def test_an_earlier_fallback_is_kept(sandbox, open_page, monkeypatch):
+    user = theme(mine=("a.png", "one.mp4", "two.mp4"), current="a.png")
+    plugin(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    for name in ("one.mp4", "two.mp4"):
+        flow(p).emit("child-activated", tile(p, name))
+        spin()
+        grab_frame(got)
+        (pl.STATE / "current/background").unlink()
+        (pl.STATE / "current/background").symlink_to(live_state("poster"))
+    # Playing two.mp4 over one.mp4's poster still falls back to the image from before both.
+    assert live_state("video") == str(user / "two.mp4")
+    assert live_state("fallback") == str(user / "a.png")
+
+
+def test_an_added_video_is_copied_and_played(sandbox, open_page, monkeypatch, tmp_path):
+    user = theme()
+    plugin(sandbox)
+    (tmp_path / "clip.webm").write_bytes(b"video")
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    p.page.on_files(FilesChosen(Gio.File.new_for_path(str(tmp_path / "clip.webm"))), None)
+    spin()
+    assert (user / "clip.webm").read_bytes() == b"video"
+    grab_frame(got)
+    assert got["chain"][-1][0][1][-2:] == [str(user / "clip.webm"), "420"]
+    assert bg_sets(sandbox) == []  # never `omarchy theme bg set` on the video itself
+
+
+def test_trashing_the_playing_video_switches_to_an_image(sandbox, open_page, monkeypatch):
+    user = theme(stock=(), mine=("a.png", "clip.mp4"))
+    plugin(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    flow(p).emit("child-activated", tile(p, "clip.mp4"))
+    spin()
+    grab_frame(got)
+    (pl.STATE / "current/background").symlink_to(live_state("poster"))
+    p.page.populate()
+    p.click("Move to Trash", within=tile(p, "clip.mp4"))
+    answer(p, "ok")
+    # Setting an image is what makes the plugin stop the video (its --stop-if-changed).
+    assert bg_sets(sandbox) == [str(user / "a.png")]
+    assert p.toasts[-1] == "Moved to the Trash; switched to a.png"
