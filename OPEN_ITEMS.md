@@ -16,11 +16,6 @@ Covered by tests with stand-ins, but never clicked through live:
   its layout; if Omarchy re-adds enabled widgets, it would come back, harmlessly).
 - **Keyboard:** a non-Latin layout keeping shortcuts working.
 - **Restore all defaults** end to end.
-- **Background videos** (added 2026-10-16): choosing or adding a video so the Live Wallpaper plugin
-  plays it, the plugin resuming it after `omarchy-restart-shell`, and choosing an image stopping it.
-  The poster's file name was checked against the plugin's own cache and the ffmpeg command run on a
-  real video, but nothing was played live. Copies the plugin's picker steps from its
-  `live-wallpaper.sh` (v3.0.16); a plugin update that changes its state files would break this.
 - **Desktop Notes:** the page's sliders and position moving the widget live. (The widget's settings
   button was confirmed live on 2026-10-09: it opens the app on this page when closed, and brings it
   forward on this page when open on another workspace.)

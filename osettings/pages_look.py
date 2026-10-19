@@ -1,20 +1,17 @@
 """Appearance pages: theme, theme colors, background, window look, per-app window rules."""
 
-import hashlib
-import json
 import os
 import re
 import shutil
-import tempfile
 import tomllib
 from pathlib import Path
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from .core import (DEFAULT_THEME, HOME, OMARCHY_PATH, STATE, USER_THEMES, VIDEO_EXTS, Page, clear_group, combo_row,
-                   confirm, current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in, load_texture_async,
+from .core import (DEFAULT_THEME, HOME, OMARCHY_PATH, STATE, USER_THEMES, Page, clear_group, combo_row, confirm,
+                   current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in, load_texture_async,
                    reset_group, rgba_from_hypr, rgba_to_hex, rgba_to_hypr, run, run_async, run_chain, scale_row,
-                   search_combo, slugify, switch_row, theme_dir, theme_preview, trash_file, write_atomic)
+                   search_combo, slugify, switch_row, theme_dir, theme_preview, trash_file)
 from .store import DEFAULT_ANIMATIONS
 
 PIN_HOOK = HOME / ".config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins"
@@ -59,105 +56,6 @@ def thumb():
     pic.add_css_class("card")
     pic.set_overflow(Gtk.Overflow.HIDDEN)
     return pic
-
-
-# ---------------------------------------------------------------- live wallpaper
-# Video backgrounds are played by the Live Wallpaper shell plugin (tenzin.live-wallpaper, in
-# ~/.config/omarchy/plugins, not in this repo). It only applies videos from its own picker, so
-# choosing one here does what its live-wallpaper.sh does after a pick: set a still frame (the
-# "poster") as the normal background, note the video in the plugin's state folder, and ask the
-# running plugin to play it. The plugin re-reads that state when the shell starts, and stops the
-# video by itself once the background is set to anything but the poster.
-
-LIVE_WALLPAPER = "tenzin.live-wallpaper"
-LIVE_WALLPAPER_MAX_BYTES = 524288000  # the plugin refuses bigger videos (MAX_VIDEO_BYTES)
-
-
-def is_video(path):
-    return Path(path).suffix.lower() in VIDEO_EXTS
-
-
-def live_wallpaper_enabled():
-    """Whether the Live Wallpaper plugin is installed and switched on, so videos can be offered."""
-    try:
-        return any(p.get("id") == LIVE_WALLPAPER and p.get("enabled")
-                   for p in json.loads(run(["omarchy", "plugin", "list", "--json"])))
-    except Exception:
-        return False
-
-
-def live_wallpaper_state():
-    return STATE / "live-wallpaper"
-
-
-def video_poster(video):
-    """Where the plugin keeps a video's still frame. The same name as its thumbnail_for (path, size
-    and mtime hashed), so a frame either side made is shared."""
-    st = os.stat(video)
-    key = f"ffmpeg-v2:{video}:{st.st_size}:{int(st.st_mtime)}"
-    return HOME / ".cache/omarchy/live-wallpaper" / f"{hashlib.md5(key.encode()).hexdigest()}.jpg"
-
-
-def make_poster(video, done):
-    """Grab a video's first frame as its poster, off the main loop; done(poster or None)."""
-    poster = video_poster(video)
-    if poster.is_file():
-        return done(poster)
-    poster.parent.mkdir(parents=True, exist_ok=True)
-    # Its own name, as the grid and a choice can ask for the same frame at once; ffmpeg picks the
-    # format from the .jpg.
-    fd, tmp = tempfile.mkstemp(dir=poster.parent, prefix=f".{poster.stem}.", suffix=".jpg")
-    os.close(fd)
-    tmp = Path(tmp)
-
-    def finished(code, _o, _e):
-        if code == 0 and tmp.is_file() and tmp.stat().st_size:
-            os.replace(tmp, poster)
-            done(poster)
-        else:
-            tmp.unlink(missing_ok=True)
-            done(None)
-
-    run_async(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-threads", "1", "-i", str(video),
-               "-an", "-frames:v", "1", "-vf", "scale=1536:-2:force_original_aspect_ratio=decrease",
-               "-q:v", "3", "-y", str(tmp)], finished, timeout=30)
-
-
-def current_background():
-    """The background on screen: the video, while the plugin plays one over its poster, else the
-    image the background link points at (None without one)."""
-    link = STATE / "current/background"
-    current = os.path.realpath(link) if link.exists() else None
-    state = live_wallpaper_state()
-    try:
-        expected, video = ((state / name).read_text().strip() for name in ("expected", "video"))
-    except OSError:
-        return current
-    return video if current and current == expected and os.path.isfile(video) else current
-
-
-def remember_video(video, poster, fallback):
-    """Write the plugin's state as its picker does, before the poster is set: `expected` keeps it
-    from stopping the video when the background changes to the poster, and `fallback` is the image
-    it restores if playing fails (kept from an earlier video, as the plugin does)."""
-    state = live_wallpaper_state()
-    state.mkdir(mode=0o700, parents=True, exist_ok=True)
-    old = (state / "fallback").read_text().strip() if (state / "fallback").is_file() else ""
-    entries = {"video": video, "poster": poster, "expected": poster}
-    if not os.path.isfile(old) and fallback:
-        entries["fallback"] = fallback
-    for name, value in entries.items():
-        write_atomic(state / name, f"{value}\n")
-        os.chmod(state / name, 0o600)
-
-
-def show_thumbnail(path, pic, width, height):
-    """Fill a picture with an image's thumbnail, or a video's poster (made first if needed)."""
-    if is_video(path):
-        make_poster(path, lambda poster: poster and load_texture_async(poster, width, height,
-                                                                       lambda t: t and pic.set_paintable(t)))
-    else:
-        load_texture_async(path, width, height, lambda t: t and pic.set_paintable(t))
 
 
 def apply_pins(store):
@@ -457,8 +355,7 @@ class BackgroundPage(Page):
         buttons = Gtk.Box(spacing=6)
         self.bulk = icon_button("selection-mode-symbolic", "Move several to the Trash…", self.choose_remove)
         buttons.append(self.bulk)
-        self.add_button = icon_button("list-add-symbolic", "Add images…", self.on_add)
-        buttons.append(self.add_button)
+        buttons.append(icon_button("list-add-symbolic", "Add images…", self.on_add))
         self.group.set_header_suffix(buttons)
         self.flow = flowbox()
         self.flow.connect("child-activated", self.on_activate)
@@ -475,25 +372,16 @@ class BackgroundPage(Page):
     def populate(self):
         while (c := self.flow.get_first_child()):
             self.flow.remove(c)
-        # Videos only while the Live Wallpaper plugin is on to play them.
-        self.videos = live_wallpaper_enabled()
-        self.add_button.set_tooltip_text("Add images or videos…" if self.videos else "Add images…")
         self.group.set_description(f"Wallpapers for the current theme ({current_theme_slug()}). "
-                                   "Use + to add your own"
-                                   f"{' (videos play through the Live Wallpaper plugin)' if self.videos else ''}"
-                                   "; ones you added have a button to move them to the "
+                                   "Use + to add your own; ones you added have a button to move them to the "
                                    "Trash, and the select button moves several at once.")
-        current = current_background() or ""
+        link = STATE / "current/background"
+        current = os.path.realpath(link) if link.exists() else ""
         mine = self.user_dir()
-        self.bulk.set_visible(bool(images_in(mine, videos=self.videos)))
-        for img in images_in(mine, STATE / "current/theme/backgrounds", videos=self.videos):
+        self.bulk.set_visible(bool(images_in(mine)))
+        for img in images_in(mine, STATE / "current/theme/backgrounds"):
             pic = thumb()
             overlay = Gtk.Overlay(child=pic)
-            if is_video(img):
-                badge = Gtk.Image(icon_name="media-playback-start-symbolic", tooltip_text="Video",
-                                  halign=Gtk.Align.START, valign=Gtk.Align.END, margin_start=8, margin_bottom=8)
-                badge.add_css_class("osd")
-                overlay.add_overlay(badge)
             # Only backgrounds the user added can go: the theme's own come back with the theme.
             if img.parent == mine:
                 btn = Gtk.Button(icon_name="user-trash-symbolic", tooltip_text="Move to Trash",
@@ -507,7 +395,7 @@ class BackgroundPage(Page):
             self.flow.append(child)
             if os.path.realpath(img) == current:
                 self.flow.select_child(child)
-            show_thumbnail(img, pic, 400, 225)
+            load_texture_async(img, 400, 225, lambda t, p=pic: t and p.set_paintable(t))
 
     def confirm_remove(self, img):
         confirm(self.win, "Move this background to the Trash?",
@@ -516,7 +404,7 @@ class BackgroundPage(Page):
 
     def choose_remove(self):
         """Pick several of the user's own backgrounds and move them to the Trash in one go."""
-        mine = images_in(self.user_dir(), videos=self.videos)
+        mine = images_in(self.user_dir())
         if not mine:
             return
         dialog = Adw.AlertDialog(heading="Move backgrounds to the Trash?",
@@ -569,7 +457,7 @@ class BackgroundPage(Page):
             row.add_suffix(pic)
             listbox.append(row)
             checks[img] = check
-            show_thumbnail(img, pic, 128, 72)
+            load_texture_async(img, 128, 72, lambda t, p=pic: t and p.set_paintable(t))
         dialog.set_extra_child(Gtk.ScrolledWindow(child=listbox, propagate_natural_height=True,
                                                   max_content_height=360,
                                                   hscrollbar_policy=Gtk.PolicyType.NEVER))
@@ -586,7 +474,8 @@ class BackgroundPage(Page):
         self.remove_many([img])
 
     def remove_many(self, imgs):
-        current = current_background()
+        link = STATE / "current/background"
+        current = os.path.realpath(link) if link.exists() else None
         moved, failed = [], []
         for img in imgs:
             err = trash_file(img)
@@ -603,7 +492,6 @@ class BackgroundPage(Page):
         if current and any(os.path.realpath(i) == current for i in moved):
             # Don't leave the desktop pointing at a file that's gone.
             what = "Moved to the Trash" if len(moved) == 1 else f"Moved {len(moved)} backgrounds to the Trash"
-            # An image, not a video: the plugin stops the trashed video once the background changes.
             remaining = images_in(self.user_dir(), STATE / "current/theme/backgrounds")
             if remaining:
                 run_async(["omarchy", "theme", "bg", "set", str(remaining[0])], lambda *_: self.populate())
@@ -615,56 +503,13 @@ class BackgroundPage(Page):
         self.populate()
 
     def on_activate(self, _flow, child):
-        self.set_background(child.path)
-
-    def set_background(self, path, done=None):
-        if is_video(path):
-            return self.set_video(path, done)
-        run_async(["omarchy", "theme", "bg", "set", str(path)],
-                  lambda c, o, e: (self.win.toast("Background updated" if c == 0 else e.strip()[:120]),
-                                   done and done()))
-
-    def set_video(self, video, done=None):
-        """Play a video as the background through the Live Wallpaper plugin (see remember_video)."""
-        if os.path.getsize(video) > LIVE_WALLPAPER_MAX_BYTES:
-            self.win.toast(f"{video.name} is too big for Live Wallpaper (500 MB at most)")
-            return done and done()
-        link = STATE / "current/background"
-        shown = os.path.realpath(link) if link.exists() else ""
-        stills = images_in(self.user_dir(), STATE / "current/theme/backgrounds")
-        # The image to go back to if playing fails: the current one, unless that's a poster.
-        fallback = shown if os.path.isfile(shown) and not is_video(shown) and \
-            not shown.startswith(str(video_poster(video).parent) + "/") else (str(stills[0]) if stills else "")
-        self.win.busy("Starting the video…")
-
-        def poster_ready(poster):
-            if poster is None:
-                self.win.toast(f"Couldn't read {video.name} as a video")
-                return done and done()
-            remember_video(str(video), str(poster), fallback)
-            run_chain([["omarchy", "theme", "bg", "set", str(poster)],
-                       ["omarchy-shell", "-q", LIVE_WALLPAPER, "play", str(video), "420"]], played)
-
-        def played(failures):
-            if failures:
-                # Most likely the plugin isn't running (e.g. the shell started before Qt Multimedia
-                # was installed); the poster stays as a still background meanwhile.
-                self.win.toast("Couldn't start the video. Restart the shell (omarchy-restart-shell) "
-                               "and choose it again.")
-            else:
-                self.win.toast("Background updated")
-            self.populate()
-            done and done()
-
-        make_poster(video, poster_ready)
+        run_async(["omarchy", "theme", "bg", "set", str(child.path)],
+                  lambda c, o, e: self.win.toast("Background updated" if c == 0 else e.strip()[:120]))
 
     def on_add(self):
         dialog = Gtk.FileDialog(title="Add backgrounds")
-        f = Gtk.FileFilter(name="Images and videos" if self.videos else "Images")
+        f = Gtk.FileFilter(name="Images")
         f.add_mime_type("image/*")
-        if self.videos:
-            for ext in sorted(VIDEO_EXTS):
-                f.add_suffix(ext[1:])
         filters = Gio.ListStore.new(Gtk.FileFilter)
         filters.append(f)
         dialog.set_filters(filters)
@@ -697,7 +542,7 @@ class BackgroundPage(Page):
                            f"{', '.join(failed)[:120]}")
         self.populate()
         if last:
-            self.set_background(last, self.populate)
+            run_async(["omarchy", "theme", "bg", "set", str(last)], lambda *_: self.populate())
 
     def reset(self, done=None):
         stock = images_in(STATE / "current/theme/backgrounds")

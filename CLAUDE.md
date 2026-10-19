@@ -89,7 +89,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 |---|---|---|---|---|
 | Appearance | Theme (`theme`) | `ThemePage`, pages_look | `omarchy theme set/install`; "keep" pins re-applied by the theme-set hook | test_page_theme |
 | | Theme Colors (`colors`) | `ColorsPage`, pages_look | edits `colors.toml` (overlay copy for stock themes), then `omarchy theme set` | test_page_colors, test_display_colors |
-| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/`, moved to the Trash one at a time or several at once (`choose_remove`), then switching to another if the current one went; the grid orders numbers by value (`natural_key`: 2.png before 10.png), unlike Omarchy's `omarchy-theme-bg-next`, which cycles in plain text order. Videos are listed, added and set only while the Live Wallpaper plugin (`tenzin.live-wallpaper`, not in this repo) is enabled in `omarchy plugin list --json`: choosing one copies its picker's steps (see "Design decisions") | test_page_background, test_review_fixes |
+| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/`, moved to the Trash one at a time or several at once (`choose_remove`), then switching to another if the current one went; the grid orders numbers by value (`natural_key`: 2.png before 10.png), unlike Omarchy's `omarchy-theme-bg-next`, which cycles in plain text order | test_page_background, test_review_fixes |
 | | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | test_page_windows |
 | | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | test_page_rules |
 | Display | Displays (`displays`) | `DisplaysPage`, pages_system | trial with `hyprctl eval` + watchdog; Keep saves `store.monitors` into the Lua; Restore defaults edits `monitors.lua` | test_page_displays, test_review_fixes |
@@ -139,15 +139,6 @@ Power and Bar, `hyprsunset.conf`, `colors.toml`, the pin hook, the notes widget'
   render error into a toast: a hand-edited settings.json must never stop the window from opening
   (it once did), nor leave an entry that fails every save. A section name that isn't a Lua name
   (`my-plugin`) is kept and written as a quoted key.
-- Background videos go through the Live Wallpaper plugin, which has no command to set one: the
-  app does what its `live-wallpaper.sh` does after a pick (`set_video`, `remember_video`). It makes
-  the still frame ("poster", named as the plugin's `thumbnail_for` names it, so either side's is
-  reused), writes the plugin's `video`, `poster`, `expected` and `fallback` files in
-  `~/.local/state/omarchy/live-wallpaper` *before* `omarchy theme bg set <poster>` (the plugin
-  checks every second and stops the video once the background isn't `expected`), then runs
-  `omarchy-shell -q tenzin.live-wallpaper play <video> 420`. Never `omarchy theme bg set` a video.
-  Choosing an image needs nothing extra: the plugin stops the video itself. Recheck these steps
-  against the plugin's script after it updates.
 - `omarchy toggle …` commands flip state: check the current state and only call them when it
   differs. `omarchy toggle bar off` *shows* the bar (it removes the bar-off flag).
 
