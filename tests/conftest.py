@@ -166,6 +166,8 @@ def sandbox(tmp_path, monkeypatch, request):
         "MONITORS_LUA": home / ".config/hypr/monitors.lua",
         "HYPRSUNSET_CONF": home / ".config/hypr/hyprsunset.conf",
         "PIN_HOOK": home / ".config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins",
+        "CYCLE_TIMER": home / ".config/systemd/user/wallpaper-cycle.timer",
+        "CYCLE_SERVICE": home / ".config/systemd/user/wallpaper-cycle.service",
         "NOTES_CONFIG": home / ".config/desktop-notes/config.json",
         "NOTES_PLUGIN": home / ".config/omarchy/plugins/sourced.desktop-notes",
     }
@@ -218,7 +220,7 @@ def sandbox(tmp_path, monkeypatch, request):
 
 REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
 WATCHED = [REAL_HOME / ".config/hypr", REAL_HOME / ".config/omarchy-settings", REAL_HOME / ".config/omarchy",
-           REAL_HOME / ".config/desktop-notes"]
+           REAL_HOME / ".config/desktop-notes", REAL_HOME / ".config/systemd/user"]
 
 
 def _snapshot():

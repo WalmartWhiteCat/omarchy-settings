@@ -89,7 +89,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 |---|---|---|---|---|
 | Appearance | Theme (`theme`) | `ThemePage`, pages_look | `omarchy theme set/install`; "keep" pins re-applied by the theme-set hook | test_page_theme |
 | | Theme Colors (`colors`) | `ColorsPage`, pages_look | edits `colors.toml` (overlay copy for stock themes), then `omarchy theme set` | test_page_colors, test_display_colors |
-| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/`, moved to the Trash one at a time or several at once (`choose_remove`), then switching to another if the current one went; the grid orders numbers by value (`natural_key`: 2.png before 10.png), unlike Omarchy's `omarchy-theme-bg-next`, which cycles in plain text order | test_page_background, test_review_fixes |
+| | Background (`background`) | `BackgroundPage`, pages_look | `omarchy theme bg`; added files in `~/.config/omarchy/backgrounds/<theme>/`, moved to the Trash one at a time or several at once (`choose_remove`), then switching to another if the current one went; the grid orders numbers by value (`natural_key`: 2.png before 10.png), unlike Omarchy's `omarchy-theme-bg-next`, which cycles in plain text order. Automatic change: `systemctl --user enable/disable --now wallpaper-cycle.timer`; the interval rewrites `~/.config/systemd/user/wallpaper-cycle.timer` (`OnCalendar`), then `daemon-reload` + `try-restart`. The units first came from Hermes; an existing service keeps its command, a timer set by hand shows as "Custom". The grid's highlight isn't refreshed while the page stays open and the timer fires | test_page_background, test_review_fixes |
 | | Windows (`windows`) | `WindowsPage`, pages_look | `store.values` (Hyprland options as `"section:key"`, plus animations in `store.anim`), rendered into the generated Lua | test_page_windows |
 | | App Rules (`rules`) | `RulesPage`, pages_look | `store.rules`, rendered into the Lua | test_page_rules |
 | Display | Displays (`displays`) | `DisplaysPage`, pages_system | trial with `hyprctl eval` + watchdog; Keep saves `store.monitors` into the Lua; Restore defaults edits `monitors.lua` | test_page_displays, test_review_fixes |
@@ -115,7 +115,7 @@ stand-ins and each covers one past fix. New page tests should use `tests/pagekit
 
 Pages save in two ways: through the Store (`store.values`, `rules`, `cursor`... saved after a
 350ms debounce, so tests call `p.save()`), or by writing a file straight away (`shell.json` on
-Power and Bar, `hyprsunset.conf`, `colors.toml`, the pin hook, the notes widget's
+Power and Bar, `hyprsunset.conf`, `colors.toml`, the pin hook, the wallpaper timer, the notes widget's
 `config.json`), which tests read directly.
 
 ## Design decisions: don't "fix" these
@@ -180,7 +180,10 @@ can't import `gi`.
 
 How the sandbox works (`tests/conftest.py`):
 - Every module-level path (HOME, the config, state and Hypr folders, `OMARCHY_PATH`, themes...)
-  points into `tmp_path`, so the autouse `sandbox` fixture fills it: `tmp_path/home` (HOME, with
+  listed in the fixture's `paths` points into `tmp_path`. A new constant built from `HOME` at import
+  keeps the real path until it's added there, so add it before its first test run (the wallpaper
+  timer's tests once overwrote the real units this way); `WATCHED` fails the run if a real folder
+  it lists changes, so add new folders the app writes to as well. So the autouse `sandbox` fixture fills it: `tmp_path/home` (HOME, with
   only `.config/hypr`) and an empty `tmp_path/omarchy` exist when a test starts. To give a page a
   file to read, write it at the module's path, making its folder first (e.g.
   `ps.SHELL_JSON.parent.mkdir(parents=True)`; `~/.config/omarchy` doesn't exist yet). Don't assume `tmp_path`

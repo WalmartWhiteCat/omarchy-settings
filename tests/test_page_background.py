@@ -1,7 +1,7 @@
 """Background page, built for real (see pagekit): the theme's wallpapers and the user's own, which
 one is current, setting one, adding images (copies, name clashes, files that can't be copied),
-moving one or several to the Trash (and not leaving the desktop on a deleted file), and Restore
-defaults.
+moving one or several to the Trash (and not leaving the desktop on a deleted file), Restore
+defaults, and the automatic change timer.
 Older stand-in tests are in test_review_fixes."""
 
 import os
@@ -289,3 +289,168 @@ def test_restore_defaults_without_stock_wallpapers(sandbox, open_page):
     answer(p, "ok")
     assert bg_sets(sandbox) == []
     assert p.toasts[-1] == "This theme has no stock backgrounds"
+
+
+# Automatic change
+
+SWITCH, HOW_OFTEN = "Change the background automatically", "How often"
+IS_ACTIVE = ("systemctl", "--user", "is-active", pl.CYCLE_TIMER_NAME)
+HERMES_TIMER = """[Unit]
+Description=Wallpaper cycling timer (10 min)
+
+[Timer]
+OnCalendar=*-*-* *:00/10
+Accuracy=1us
+
+[Install]
+WantedBy=timers.target
+"""
+HERMES_SERVICE = """[Unit]
+Description=Cycle Omarchy wallpaper (10 min)
+
+[Service]
+Type=oneshot
+ExecStart=/somewhere/else/omarchy theme bg next
+"""
+
+
+def units(sandbox, timer=HERMES_TIMER, service=HERMES_SERVICE, active=True):
+    pl.CYCLE_TIMER.parent.mkdir(parents=True, exist_ok=True)
+    if timer is not None:
+        pl.CYCLE_TIMER.write_text(timer)
+    if service is not None:
+        pl.CYCLE_SERVICE.write_text(service)
+    sandbox.run_output[IS_ACTIVE] = "active" if active else "inactive"
+
+
+def selected(p, title=HOW_OFTEN):
+    row = p.row(title, Adw.ComboRow)
+    return row.get_model().get_string(row.get_selected())
+
+
+def test_cycle_shows_the_timer_hermes_set_up(open_page, sandbox):
+    theme()
+    units(sandbox)
+    p = open_page("background")
+    assert p.row(SWITCH, Adw.SwitchRow).get_active()
+    assert selected(p) == "Every 10 minutes"
+
+
+def test_cycle_shows_off_when_the_timer_is_stopped_or_missing(open_page, sandbox):
+    theme()
+    p = open_page("background")
+    assert not p.row(SWITCH, Adw.SwitchRow).get_active()
+    assert selected(p) == "Every 10 minutes"
+    assert not pl.CYCLE_TIMER.exists()  # only looking writes nothing
+
+
+def test_cycle_off_stops_and_disables_the_timer(open_page, sandbox):
+    theme()
+    units(sandbox)
+    p = open_page("background")
+    p.switch(SWITCH, False)
+    assert sandbox.run_chain[-1] == [["systemctl", "--user", "disable", "--now", pl.CYCLE_TIMER_NAME]]
+    assert pl.CYCLE_TIMER.read_text() == HERMES_TIMER
+
+
+def test_cycle_on_keeps_an_existing_timer(open_page, sandbox):
+    theme()
+    units(sandbox, timer=HERMES_TIMER.replace("*-*-* *:00/10", "Mon 09:00"), active=False)
+    p = open_page("background")
+    p.switch(SWITCH, True)
+    assert sandbox.run_chain[-1] == [["systemctl", "--user", "daemon-reload"],
+                                     ["systemctl", "--user", "enable", "--now", pl.CYCLE_TIMER_NAME]]
+    assert "OnCalendar=Mon 09:00" in pl.CYCLE_TIMER.read_text()
+
+
+def test_cycle_on_creates_missing_units_with_the_chosen_interval(open_page, sandbox, monkeypatch):
+    theme()
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    p.choose(HOW_OFTEN, "Every 30 minutes")
+    got["chain"][-1][1]([])
+    p.switch(SWITCH, True)
+    assert "OnCalendar=*:00/30\n" in pl.CYCLE_TIMER.read_text()
+    assert f"ExecStart={pl.OMARCHY_PATH}/bin/omarchy theme bg next" in pl.CYCLE_SERVICE.read_text()
+    assert sandbox.run_chain[-1][-1] == ["systemctl", "--user", "enable", "--now", pl.CYCLE_TIMER_NAME]
+
+
+def test_cycle_switch_goes_back_when_systemctl_fails(open_page, sandbox, monkeypatch):
+    theme()
+    units(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    p.switch(SWITCH, False)
+    group = p.page.cycle_group
+    assert not group.get_sensitive()  # no second change until this one finishes
+    calls = len(sandbox.run_chain)
+    got["chain"][-1][1](["systemctl --user disable: no bus"])
+    spin()
+    assert p.row(SWITCH, Adw.SwitchRow).get_active()
+    assert group.get_sensitive()
+    assert any("no bus" in t for t in p.toasts)
+    assert len(sandbox.run_chain) == calls  # putting it back runs nothing
+
+
+def test_cycle_switch_can_go_back_on_after_going_off(open_page, sandbox, monkeypatch):
+    theme()
+    units(sandbox)
+    got = callbacks(monkeypatch, pl)
+    p = open_page("background")
+    p.switch(SWITCH, False)
+    got["chain"][-1][1]([])
+    p.switch(SWITCH, True)
+    assert sandbox.run_chain[-1][-1] == ["systemctl", "--user", "enable", "--now", pl.CYCLE_TIMER_NAME]
+
+
+def test_cycle_interval_rewrites_the_timer_and_keeps_the_service_command(open_page, sandbox):
+    theme()
+    units(sandbox)
+    p = open_page("background")
+    p.choose(HOW_OFTEN, "Every 2 hours")
+    timer = pl.CYCLE_TIMER.read_text()
+    assert "OnCalendar=00/2:00\n" in timer
+    assert "10 min" not in timer and "Accuracy=" not in timer and "AccuracySec=1s" in timer
+    assert "WantedBy=timers.target" in timer
+    service = pl.CYCLE_SERVICE.read_text()
+    assert "ExecStart=/somewhere/else/omarchy theme bg next" in service and "10 min" not in service
+    assert sandbox.run_chain[-1] == [["systemctl", "--user", "daemon-reload"],
+                                     ["systemctl", "--user", "try-restart", pl.CYCLE_TIMER_NAME]]
+
+
+def test_cycle_interval_write_failure_goes_back(open_page, sandbox, monkeypatch):
+    theme()
+    units(sandbox)
+    p = open_page("background")
+
+    def fail(*_):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pl, "write_atomic", fail)
+    p.choose(HOW_OFTEN, "Every hour")
+    assert selected(p) == "Every 10 minutes"
+    assert any("disk full" in t for t in p.toasts)
+    assert sandbox.run_chain == []
+
+
+def test_cycle_custom_schedule_is_shown_and_kept_until_changed(open_page, sandbox):
+    theme()
+    units(sandbox, timer=HERMES_TIMER.replace("*-*-* *:00/10", "Mon 09:00"))
+    p = open_page("background")
+    assert selected(p) == "Custom (Mon 09:00)"
+    p.choose(HOW_OFTEN, "Every day")
+    assert "OnCalendar=00:00\n" in pl.CYCLE_TIMER.read_text()
+    p.choose(HOW_OFTEN, "Custom (Mon 09:00)")
+    assert "OnCalendar=Mon 09:00\n" in pl.CYCLE_TIMER.read_text()
+
+
+def test_cycle_timer_without_a_single_schedule_is_custom_and_cant_be_chosen_back(open_page, sandbox):
+    theme()
+    units(sandbox, timer=HERMES_TIMER.replace("OnCalendar=*-*-* *:00/10", "OnUnitActiveSec=7min"))
+    p = open_page("background")
+    assert selected(p) == "Custom"
+    p.switch(SWITCH, False)
+    p.choose(HOW_OFTEN, "Every hour")
+    p.choose(HOW_OFTEN, "Custom")
+    assert selected(p) == "Every hour"
+    assert "OnCalendar=*:00\n" in pl.CYCLE_TIMER.read_text()

@@ -15,6 +15,7 @@ Covered by tests with stand-ins, but never clicked through live:
 - **Bar:** removing the Omarchy menu widget from the layout (assumes the bar shows only what's in
   its layout; if Omarchy re-adds enabled widgets, it would come back, harmlessly).
 - **Keyboard:** a non-Latin layout keeping shortcuts working.
+- **Background:** Automatic change's switch and interval against the real timer.
 - **Restore all defaults** end to end.
 - **Desktop Notes:** the page's sliders and position moving the widget live. (The widget's settings
   button was confirmed live on 2026-10-09: it opens the app on this page when closed, and brings it

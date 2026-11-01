@@ -11,7 +11,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from .core import (DEFAULT_THEME, HOME, OMARCHY_PATH, STATE, USER_THEMES, Page, clear_group, combo_row, confirm,
                    current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in, load_texture_async,
                    reset_group, rgba_from_hypr, rgba_to_hex, rgba_to_hypr, run, run_async, run_chain, scale_row,
-                   search_combo, slugify, switch_row, theme_dir, theme_preview, trash_file)
+                   search_combo, slugify, switch_row, theme_dir, theme_preview, trash_file, write_atomic)
 from .store import DEFAULT_ANIMATIONS
 
 PIN_HOOK = HOME / ".config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins"
@@ -347,10 +347,65 @@ class ColorsPage(Page):
 # ---------------------------------------------------------------- background
 
 
+CYCLE_TIMER_NAME = "wallpaper-cycle.timer"
+CYCLE_TIMER = HOME / ".config/systemd/user" / CYCLE_TIMER_NAME
+CYCLE_SERVICE = HOME / ".config/systemd/user/wallpaper-cycle.service"
+CYCLE_DESCRIPTION = "Cycle Omarchy wallpaper"
+CYCLE_DEFAULT = "*:00/10"
+# Clock-aligned steps that divide the hour or day evenly: "*:00/7" would fire at :56 and again at :00.
+CYCLE_INTERVALS = {"Every 5 minutes": "*:00/5", "Every 10 minutes": "*:00/10", "Every 15 minutes": "*:00/15",
+                   "Every 20 minutes": "*:00/20", "Every 30 minutes": "*:00/30", "Every hour": "*:00",
+                   "Every 2 hours": "00/2:00", "Every 3 hours": "00/3:00", "Every 4 hours": "00/4:00",
+                   "Every 6 hours": "00/6:00", "Every 12 hours": "00/12:00", "Every day": "00:00"}
+
+
+def read_cycle_schedule():
+    """The timer's OnCalendar, without the "every date" prefix systemd allows; CYCLE_DEFAULT with no
+    timer yet, "" for one this page can't show as a single schedule."""
+    try:
+        text = CYCLE_TIMER.read_text()
+    except FileNotFoundError:
+        return CYCLE_DEFAULT
+    except (OSError, UnicodeError):
+        return ""
+    found = re.findall(r"^\s*OnCalendar\s*=\s*(.*?)\s*$", text, re.M)
+    return found[0].removeprefix("*-*-* ").strip() if len(found) == 1 else ""
+
+
+def write_cycle_units(schedule):
+    """Write the timer, and the service if it's missing. An existing service keeps its command, in
+    case it was changed by hand; only its description changes, since it may name an old interval."""
+    CYCLE_TIMER.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(CYCLE_TIMER, f"""[Unit]
+Description={CYCLE_DESCRIPTION} on a schedule
+
+[Timer]
+OnCalendar={schedule}
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+""")
+    if CYCLE_SERVICE.exists():
+        old = CYCLE_SERVICE.read_text()
+        new = re.sub(r"^Description=.*$", f"Description={CYCLE_DESCRIPTION}", old, flags=re.M)
+        if new != old:
+            write_atomic(CYCLE_SERVICE, new)
+    else:
+        write_atomic(CYCLE_SERVICE, f"""[Unit]
+Description={CYCLE_DESCRIPTION}
+
+[Service]
+Type=oneshot
+ExecStart={OMARCHY_PATH}/bin/omarchy theme bg next
+""")
+
+
 class BackgroundPage(Page):
     key, title, icon = "background", "Background", "preferences-desktop-wallpaper-symbolic"
 
     def build(self):
+        self.add(self.build_cycle())
         self.group = Adw.PreferencesGroup(title="Background")
         buttons = Gtk.Box(spacing=6)
         self.bulk = icon_button("selection-mode-symbolic", "Move several to the Trash…", self.choose_remove)
@@ -362,9 +417,79 @@ class BackgroundPage(Page):
         self.group.add(self.flow)
         self.add(self.group)
         self.add(reset_group(self.win, "Restore the default background?",
-                             "Sets the current theme's first stock wallpaper. Images you added are kept.",
+                             "Sets the current theme's first stock wallpaper. Images you added are kept, "
+                             "and automatic changing stays as it is.",
                              self.reset))
         self.populate()
+
+    def build_cycle(self):
+        self.cycle_on = run(["systemctl", "--user", "is-active", CYCLE_TIMER_NAME]) == "active"
+        self.cycle_schedule = read_cycle_schedule()
+        labels, self.cycle_values = list(CYCLE_INTERVALS), list(CYCLE_INTERVALS.values())
+        if self.cycle_schedule not in self.cycle_values:  # set by hand: show it, and keep it until changed
+            labels.insert(0, f"Custom ({self.cycle_schedule})" if self.cycle_schedule else "Custom")
+            self.cycle_values.insert(0, self.cycle_schedule)
+        self.cycle_group = Adw.PreferencesGroup(title="Automatic change")
+        self.cycle_switch = switch_row("Change the background automatically",
+                                       "Moves through the current theme's backgrounds in order of file name",
+                                       self.cycle_on, self.on_cycle_switch)
+        self.cycle_interval = combo_row("How often", "Changes happen on the clock: every 10 minutes means "
+                                                     "at :00, :10, :20 and so on",
+                                        labels, self.cycle_schedule, self.on_cycle_interval, self.cycle_values)
+        self.cycle_group.add(self.cycle_switch)
+        self.cycle_group.add(self.cycle_interval)
+        return self.cycle_group
+
+    def on_cycle_switch(self, on):
+        if on == self.cycle_on:  # this page putting the switch back
+            return
+        systemctl = ["systemctl", "--user"]
+        cmds = [[*systemctl, "disable", "--now", CYCLE_TIMER_NAME]]
+        if on:
+            try:
+                # Only a missing timer is written: turning it on shouldn't replace a schedule set by hand.
+                if not (CYCLE_TIMER.exists() and CYCLE_SERVICE.exists()):
+                    write_cycle_units(self.cycle_schedule or CYCLE_DEFAULT)
+            except OSError as e:
+                self.win.toast(f"Couldn't write the timer: {e}"[:200])
+                self.cycle_switch.set_active(self.cycle_on)
+                return
+            cmds = [[*systemctl, "daemon-reload"], [*systemctl, "enable", "--now", CYCLE_TIMER_NAME]]
+
+        def finished(failures):
+            self.cycle_group.set_sensitive(True)
+            if failures:
+                self.win.toast(failures[0][:200])
+                self.cycle_switch.set_active(self.cycle_on)
+            else:
+                self.cycle_on = on
+
+        self.cycle_group.set_sensitive(False)  # one change at a time, so they can't finish out of order
+        run_chain(cmds, finished)
+
+    def on_cycle_interval(self, schedule):
+        if schedule == self.cycle_schedule:
+            return
+        if not schedule:  # the "Custom" entry of a timer this page can't write back
+            self.cycle_interval.set_selected(self.cycle_values.index(self.cycle_schedule))
+            return
+        try:
+            write_cycle_units(schedule)
+        except OSError as e:
+            self.win.toast(f"Couldn't write the timer: {e}"[:200])
+            self.cycle_interval.set_selected(self.cycle_values.index(self.cycle_schedule))
+            return
+        self.cycle_schedule = schedule
+
+        def finished(failures):
+            self.cycle_group.set_sensitive(True)
+            if failures:
+                self.win.toast(failures[0][:200])
+
+        self.cycle_group.set_sensitive(False)
+        # try-restart leaves a timer that's off alone, so the new interval waits for the switch.
+        run_chain([["systemctl", "--user", "daemon-reload"],
+                   ["systemctl", "--user", "try-restart", CYCLE_TIMER_NAME]], finished)
 
     def user_dir(self):
         return HOME / ".config/omarchy/backgrounds" / current_theme_slug()
