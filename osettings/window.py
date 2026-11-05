@@ -8,7 +8,7 @@ from .pages_keys import AutostartPage, KeysPage, leave_capture
 from .pages_look import BackgroundPage, ColorsPage, RulesPage, ThemePage, WindowsPage, undo_all_color_edits
 from .pages_system import (AppsPage, BarPage, CursorPage, DisplaysPage, InputPage, NightLightPage, PowerPage,
                            TextPage)
-from .pages_widgets import NotesPage
+from .pages_widgets import NotebookPage, NotesPage
 from .store import Store
 
 SECTIONS = [
@@ -16,12 +16,12 @@ SECTIONS = [
     ("Display", [DisplaysPage, NightLightPage, TextPage, CursorPage]),
     ("Input", [InputPage, KeysPage]),
     ("System", [BarPage, PowerPage, AppsPage, AutostartPage]),
-    ("Widgets", [NotesPage]),
+    ("Tools", [NotesPage, NotebookPage]),
 ]
 # Theme near the end (slowest, and it picks a wallpaper), then that theme's first stock wallpaper.
 PAGES = {cls.key for _, classes in SECTIONS for cls in classes}
 RESET_ORDER = ["windows", "rules", "displays", "input", "keys", "autostart", "nightlight", "text", "cursor",
-               "power", "bar", "notes", "colors", "theme", "background"]
+               "power", "bar", "notes", "notebook", "colors", "theme", "background"]
 
 CSS = """
 .keycap { font-family: monospace; font-size: 0.9em; padding: 2px 8px; border-radius: 6px;

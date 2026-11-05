@@ -1,10 +1,12 @@
-"""Desktop widgets: the Desktop Notes shell plugin's look and place on screen."""
+"""Tools: the Desktop Notes shell plugin's look and place on screen, and Notebook's settings."""
 
 import json
+import re
 
-from gi.repository import Adw, GLib
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from .core import HOME, Page, combo_row, hypr_json, read_json, reset_group, scale_row, switch_row, write_atomic
+from .core import (HOME, Page, combo_row, hypr_json, read_json, reset_group, rgba_to_hex, scale_row, spawn_detached,
+                   spin_row, switch_row, write_atomic)
 
 # The widget (~/.config/omarchy/plugins/sourced.desktop-notes) watches this file and applies changes
 # live. It lives outside the plugin folder because saving there reloads the plugin.
@@ -22,6 +24,22 @@ NOTES_TITLE_MAX = 60
 POSITIONS = [("Top left", "top-left"), ("Top", "top"), ("Top right", "top-right"),
              ("Left", "left"), ("Center", "center"), ("Right", "right"),
              ("Bottom left", "bottom-left"), ("Bottom", "bottom"), ("Bottom right", "bottom-right")]
+
+
+class DebouncedWrites:
+    """Slider and spinner steps are written on a 100 ms timer (`set`, `flush`). When the page goes away with that timer
+    pending, the write happens then, at once: left to fire later it would write this page's stale values over whatever
+    the file holds by then (seen in the tests, where it clobbered the next test's file)."""
+
+    def hook_unrealize(self):
+        if not getattr(self, "_unrealize_hooked", False):
+            self._unrealize_hooked = True
+            self.connect("unrealize", lambda *_: self.flush_pending())
+
+    def flush_pending(self):
+        if getattr(self, "_pending", None):
+            GLib.source_remove(self._pending)
+            self.flush()
 
 
 def read_notes_config():
@@ -70,10 +88,11 @@ def margin_axes(position):
     return horizontal, vertical
 
 
-class NotesPage(Page):
+class NotesPage(DebouncedWrites, Page):
     key, title, icon = "notes", "Desktop Notes", "accessories-text-editor-symbolic"
 
     def build(self):
+        self.hook_unrealize()
         self.cfg = read_notes_config()
         self._pending = None
         if not NOTES_PLUGIN.is_dir():
@@ -173,5 +192,241 @@ class NotesPage(Page):
             self.win.toast("Desktop Notes settings restored")
         except OSError as e:
             self.win.toast(f"Couldn't save the Desktop Notes settings: {e}")
+        self.rebuild()
+        done and done()
+
+
+
+# ---------------------------------------------------------------- Notebook
+
+# Notebook (~/Work/omarchy-notebook) has no settings dialog: it follows this file live (a file monitor), and never writes
+# it. Only values that differ from the default are written, other keys (the notes folder, anything added by hand) are kept.
+# The defaults, limits and choices must match notebook/settings.py (tests/test_widgets.py compares them; it skips when
+# Notebook isn't there). "last" is "as it was left", Notebook's behaviour before these settings existed.
+NOTEBOOK_CONFIG = HOME / ".config/omarchy-notebook/config.json"
+NOTEBOOK_BIN = HOME / ".local/bin/omarchy-notebook"
+NB_DEFAULTS = {"font": "", "margin": 140, "line_spacing": 0, "title_gap": 6, "caret": "#ffffff", "cursor_blink": True,
+               "dim": True, "dim_amount": 15, "shadows": True, "start_view": "last", "start_window": "last",
+               "start_sidebar": "last", "start_reading": "last", "start_indent": "last", "start_text_size": 0,
+               "reopen_tabs": True, "sort": "last"}
+NB_LIMITS = {"margin": (12, 800), "line_spacing": (0, 60), "title_gap": (0, 300), "dim_amount": (5, 90)}
+NB_TEXT_SIZE = (50, 500)
+SAME = ("Same as last time", "last")
+NB_CHOICES = {"start_view": (SAME, ("Simple", "simple"), ("Advanced", "advanced")),
+              "start_window": (SAME, ("Fullscreen", "fullscreen"), ("Windowed", "windowed")),
+              "start_sidebar": (SAME, ("Shown", "shown"), ("Hidden", "hidden")),
+              "start_reading": (SAME, ("Editing", "editing"), ("Reading", "reading")),
+              "start_indent": (SAME, ("On", "on"), ("Off", "off")),
+              "sort": (("Leave it as it is", "last"), ("Your order", "manual"), ("By name", "name"), ("Last edited first", "modified"))}
+NB_HEX = re.compile(r"#[0-9a-fA-F]{6}")
+
+
+def nb_valid(key, value):
+    """The same test Notebook applies to a value read from the file."""
+    default = NB_DEFAULTS[key]
+    if key in NB_CHOICES:
+        return value in [v for _, v in NB_CHOICES[key]]
+    if key == "start_text_size":
+        return isinstance(value, int) and not isinstance(value, bool) and (value == 0 or NB_TEXT_SIZE[0] <= value <= NB_TEXT_SIZE[1])
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, int):
+        lo, hi = NB_LIMITS[key]
+        return isinstance(value, int) and not isinstance(value, bool) and lo <= value <= hi
+    if key == "caret":
+        return isinstance(value, str) and NB_HEX.fullmatch(value) is not None
+    return isinstance(value, str) and len(value) < 200
+
+
+def read_notebook_config():
+    """Notebook's settings with defaults filled in and any bad value replaced by its default."""
+    data = read_json(NOTEBOOK_CONFIG)
+    data = data if isinstance(data, dict) else {}
+    return {k: data[k] if k in data and nb_valid(k, data[k]) else d for k, d in NB_DEFAULTS.items()}
+
+
+def write_notebook_config(cfg, vault=None):
+    """Merges cfg into the file: defaults are left out, other keys kept; `vault`, when given, is the notes folder."""
+    data = read_json(NOTEBOOK_CONFIG)
+    data = data if isinstance(data, dict) else {}
+    for key, default in NB_DEFAULTS.items():
+        if cfg.get(key, default) == default or not nb_valid(key, cfg.get(key)):
+            data.pop(key, None)
+        else:
+            data[key] = cfg[key]
+    if vault is not None:
+        data["vault"] = str(vault)
+    NOTEBOOK_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(NOTEBOOK_CONFIG, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def notebook_folder():
+    """The notes folder as the file names it (Notebook's own default is ~/Notes)."""
+    v = read_json(NOTEBOOK_CONFIG)
+    v = v.get("vault") if isinstance(v, dict) else None
+    return (v.strip() if isinstance(v, str) and v.strip() else "~/Notes")
+
+
+class NotebookPage(DebouncedWrites, Page):
+    key, title, icon = "notebook", "Notebook", "document-edit-symbolic"
+
+    def build(self):
+        self.hook_unrealize()
+        self.cfg = read_notebook_config()
+        self._pending = None
+        if not NOTEBOOK_BIN.exists():
+            self.add(Adw.PreferencesGroup(description="Notebook isn't installed (expected at "
+                                          f"{NOTEBOOK_BIN}). These settings are saved and used once it is."))
+
+        g = Adw.PreferencesGroup(title="Writing", description="An open Notebook follows these as you change them.")
+        self.font_row = Adw.ActionRow(title="Font", subtitle=self.cfg["font"] or "The design's own")
+        self.font_default = Gtk.Button(label="Default", valign=Gtk.Align.CENTER, css_classes=["flat"],
+                                       tooltip_text="Back to the design's own font", visible=bool(self.cfg["font"]))
+        self.font_default.connect("clicked", lambda _b: self.set_font(""))
+        choose = Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER)
+        choose.connect("clicked", lambda _b: self.choose_font())
+        self.font_row.add_suffix(self.font_default)
+        self.font_row.add_suffix(choose)
+        g.add(self.font_row)
+        g.add(spin_row("Side margins", "Space between the text and the text field's edges, each side, in pixels; "
+                       "not used in the advanced view", *NB_LIMITS["margin"], 10, self.cfg["margin"],
+                       lambda v: self.set("margin", v)))
+        g.add(spin_row("Line spacing", "Extra space between lines, in pixels", *NB_LIMITS["line_spacing"], 1,
+                       self.cfg["line_spacing"], lambda v: self.set("line_spacing", v)))
+        g.add(spin_row("Space under the title", "Between the title and the text, in pixels", *NB_LIMITS["title_gap"], 2,
+                       self.cfg["title_gap"], lambda v: self.set("title_gap", v)))
+        caret = Adw.ActionRow(title="Cursor colour")
+        self.caret = Gtk.ColorDialogButton(dialog=Gtk.ColorDialog(with_alpha=False), valign=Gtk.Align.CENTER)
+        rgba = Gdk.RGBA()
+        rgba.parse(self.cfg["caret"])
+        self.caret.set_rgba(rgba)
+        self.caret.connect("notify::rgba", lambda b, _p: self.set_now("caret", rgba_to_hex(b.get_rgba()).lower()))
+        caret.add_suffix(self.caret)
+        g.add(caret)
+        g.add(switch_row("Blinking cursor", None, self.cfg["cursor_blink"], lambda on: self.set_now("cursor_blink", on)))
+        self.add(g)
+
+        g = Adw.PreferencesGroup(title="Layout")
+        g.add(switch_row("Dim other panels", "Darken the panels the pointer isn't over", self.cfg["dim"],
+                         lambda on: self.set_now("dim", on)))
+        g.add(spin_row("Dim amount", "Percent", *NB_LIMITS["dim_amount"], 5, self.cfg["dim_amount"],
+                       lambda v: self.set("dim_amount", v)))
+        g.add(switch_row("Panel shadows", "On the panel under the pointer", self.cfg["shadows"],
+                         lambda on: self.set_now("shadows", on)))
+        self.add(g)
+
+        g = Adw.PreferencesGroup(title="Notes")
+        self.folder_row = Adw.ActionRow(title="Notes folder", subtitle=notebook_folder(), subtitle_selectable=True,
+                                        tooltip_text="An open Notebook reopens on the new folder")
+        pick = Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER)
+        pick.connect("clicked", lambda _b: self.choose_folder())
+        self.folder_row.add_suffix(pick)
+        g.add(self.folder_row)
+        g.add(self.choice("Sort notes", "Applies at once; \"Leave it as it is\" keeps what Notebook last used", "sort"))
+        self.add(g)
+
+        g = Adw.PreferencesGroup(title="When Notebook opens",
+                                 description="Each choice is \"Same as last time\" until you pick one. The shortcuts "
+                                             "inside Notebook still work whatever you choose here.")
+        g.add(self.choice("View", "Simple, or with toolbars, search and the outline panel", "start_view"))
+        g.add(self.choice("Window", None, "start_window"))
+        g.add(self.choice("Sidebar", "The list of notes", "start_sidebar"))
+        g.add(self.choice("Note", "Editing, or the reading view", "start_reading"))
+        g.add(self.choice("First-line indent", "Every paragraph indented, as in a book; the files don't change", "start_indent"))
+        self.size_switch = switch_row("Open at a set text size", None, self.cfg["start_text_size"] > 0, self.set_size_switch)
+        g.add(self.size_switch)
+        self.size_row = spin_row("Text size", "Percent of normal", *NB_TEXT_SIZE, 10, self.cfg["start_text_size"] or 100,
+                                 lambda v: self.cfg["start_text_size"] and self.set("start_text_size", v))
+        self.size_row.set_sensitive(self.cfg["start_text_size"] > 0)
+        g.add(self.size_row)
+        g.add(switch_row("Reopen the last notes", "Open the last note and its tabs again", self.cfg["reopen_tabs"],
+                         lambda on: self.set_now("reopen_tabs", on)))
+        self.add(g)
+
+        g = Adw.PreferencesGroup()
+        open_row = Adw.ButtonRow(title="Open Notebook", start_icon_name="document-edit-symbolic")
+        open_row.connect("activated", lambda _r: spawn_detached(["omarchy-notebook"]))
+        g.add(open_row)
+        self.add(g)
+
+        self.add(reset_group(self.win, "Restore default Notebook settings?",
+                             "Font, margins, spacing, cursor, dimming, shadows, sort and how it opens go back to Notebook's "
+                             "own defaults. Your notes and the notes folder are kept.", self.reset))
+
+    def choice(self, title, subtitle, key):
+        pairs = NB_CHOICES[key]
+        return combo_row(title, subtitle, [l for l, _ in pairs], self.cfg[key], lambda v: self.set_now(key, v), [v for _, v in pairs])
+
+    def set(self, key, value):
+        """A slider or spinner step: written at most every 100 ms, so an open Notebook follows without a write per step.
+        The spinner hands over floats (6.0); Notebook only accepts whole numbers for these, and would drop a 6.0."""
+        self.cfg[key] = int(value) if isinstance(value, float) and value == int(value) else value
+        if not self._pending:
+            self._pending = GLib.timeout_add(100, self.flush)
+
+    def set_now(self, key, value):
+        self.cfg[key] = value
+        self.flush()
+
+    def flush(self):
+        self._pending = None
+        try:
+            write_notebook_config(self.cfg)
+        except OSError as e:
+            self.win.toast(f"Couldn't save the Notebook settings: {e}")
+        return False
+
+    def set_font(self, family):
+        self.font_row.set_subtitle(family or "The design's own")
+        self.font_default.set_visible(bool(family))
+        self.set_now("font", family)
+
+    def choose_font(self):
+        dialog = Gtk.FontDialog(title="Font")
+
+        def done(d, result):
+            try:
+                family = d.choose_family_finish(result)
+            except GLib.Error:      # cancelled
+                return
+            if family is not None:
+                self.set_font(family.get_name())
+
+        dialog.choose_family(self.win, None, None, done)
+
+    def set_size_switch(self, on):
+        self.size_row.set_sensitive(on)
+        self.set_now("start_text_size", int(self.size_row.get_value()) if on else 0)
+
+    def choose_folder(self):
+        dialog = Gtk.FileDialog(title="Notes folder")
+
+        def done(d, result):
+            try:
+                folder = d.select_folder_finish(result)
+            except GLib.Error:      # cancelled
+                return
+            if folder is not None and folder.get_path():
+                self.set_folder(folder.get_path())
+
+        dialog.select_folder(self.win, None, done)
+
+    def set_folder(self, path):
+        try:
+            write_notebook_config(self.cfg, vault=path)
+        except OSError as e:
+            self.win.toast(f"Couldn't save the Notebook settings: {e}")
+            return
+        self.folder_row.set_subtitle(str(path))
+
+    def reset(self, done=None):
+        if getattr(self, "_pending", None):
+            GLib.source_remove(self._pending)
+            self._pending = None
+        try:
+            write_notebook_config(dict(NB_DEFAULTS))
+            self.win.toast("Notebook settings restored")
+        except OSError as e:
+            self.win.toast(f"Couldn't save the Notebook settings: {e}")
         self.rebuild()
         done and done()

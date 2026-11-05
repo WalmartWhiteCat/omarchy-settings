@@ -171,6 +171,8 @@ def sandbox(tmp_path, monkeypatch, request):
         "CYCLE_SERVICE": home / ".config/systemd/user/wallpaper-cycle.service",
         "NOTES_CONFIG": home / ".config/desktop-notes/config.json",
         "NOTES_PLUGIN": home / ".config/omarchy/plugins/sourced.desktop-notes",
+        "NOTEBOOK_CONFIG": home / ".config/omarchy-notebook/config.json",
+        "NOTEBOOK_BIN": home / ".local/bin/omarchy-notebook",
         "THUMB_DIR": home / ".cache/omarchy-settings/video-thumbs",
     }
     for mod in MODULES:
@@ -222,7 +224,7 @@ def sandbox(tmp_path, monkeypatch, request):
 
 REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
 WATCHED = [REAL_HOME / ".config/hypr", REAL_HOME / ".config/omarchy-settings", REAL_HOME / ".config/omarchy",
-           REAL_HOME / ".config/desktop-notes", REAL_HOME / ".config/systemd/user",
+           REAL_HOME / ".config/desktop-notes", REAL_HOME / ".config/omarchy-notebook", REAL_HOME / ".config/systemd/user",
            REAL_HOME / ".cache/omarchy-settings"]
 
 

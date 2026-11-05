@@ -9,7 +9,7 @@ your desktop's look and feel from one window instead of hand-editing config file
 | Display | Displays, Night Light, Fonts and Text, Cursor |
 | Input | Keyboard and Mouse, Keybindings |
 | System | Bar, Power and Notifications, Default Apps, Autostart |
-| Widgets | Desktop Notes (look and position of the `sourced.desktop-notes` shell widget) |
+| Tools | Desktop Notes (look and position of the `sourced.desktop-notes` shell widget), Notebook (its settings and how it opens) |
 
 Every page has a **Restore defaults** button, and the menu (☰) has **Restore all defaults…**.
 
@@ -87,6 +87,7 @@ like Omarchy's own menus. Everything else goes into files it owns, or small, bac
 | `~/.cache/omarchy-settings/video-thumbs/` | Still frames of video backgrounds for the Background page's grid, made with `ffmpegthumbnailer` (Omarchy's own picker uses it too); safe to delete, they're made again | Delete the folder |
 | `~/.config/systemd/user/wallpaper-cycle.timer`, `wallpaper-cycle.service` | Background → Automatic change: how often the wallpaper changes. Changing the interval rewrites the timer; the service is created if missing and otherwise only gets a new description. Not backed up: on a new machine, turn the switch on again | Turn the switch off |
 | `~/.config/desktop-notes/config.json` | Desktop Notes widget's title, background opacity, width, text size, outline, bells, click speed, monitor and position; the widget applies changes live. Notes themselves stay in `~/.local/state/desktop-notes/notes.json` | Widgets → Desktop Notes → Restore defaults |
+| `~/.config/omarchy-notebook/config.json` | Notebook's settings: font, margins, spacing, cursor, dimming, shadows, sort, how it opens, and the notes folder. Notebook follows the file live and never writes it. Only values that differ from the default are written; other keys are kept | Tools → Notebook → Restore defaults (keeps the notes folder) |
 | GNOME settings (`gsettings`) | Cursor theme and size, light/dark style, icon theme, interface font | Restore defaults on the page |
 
 The generated Lua runs each part separately, so one bad entry can't break the rest of your Hyprland

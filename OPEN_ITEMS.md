@@ -12,6 +12,7 @@ Covered by tests with stand-ins, but never clicked through live:
   presses).
 - **Night light:** turning it on from hyprsunset's neutral state (after a restart or the schedule's end).
 - **Windows (Omarchy 4.5):** the Window transparency drop-down (opaque, transparent, glassy) really changing windows, and the "Switch to Omarchy's Opaque setting" button for the old switch; checked only against stand-ins and the installed script.
+- **Tools > Notebook (2026-11-05):** the page against a real running Notebook (it follows `~/.config/omarchy-notebook/config.json` live; checked in an isolated scratch home, not with your real notes folder); the font and folder choosers and the cursor colour button were never clicked.
 - **Bar (Omarchy 4.5):** the Background drop-down (opaque, transparent, glassy) and the three sections added in 4.5 (centerBegin, centerEnd, tray); only checked against stand-ins and the installed `omarchy bar --help`.
 - **Bar:** removing the Omarchy menu widget from the layout (assumes the bar shows only what's in
   its layout; if Omarchy re-adds enabled widgets, it would come back, harmlessly).

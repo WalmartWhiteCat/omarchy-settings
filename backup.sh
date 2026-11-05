@@ -23,6 +23,7 @@ PATHS=(
   .config/omarchy/hooks/theme-set.d/50-omarchy-settings-pins  # keeps app style, icons and font
   .config/desktop-notes                                       # the notes widget's look and position
   .local/state/desktop-notes                                  # your notes
+  .config/omarchy-notebook                                    # Notebook's settings and its notes folder
 )
 
 cd "$HOME"
