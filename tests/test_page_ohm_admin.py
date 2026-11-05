@@ -16,8 +16,11 @@ CONFIG = {"vram": dict(VRAM), "game_mode": {"processes": []}, "model": {"path": 
           "prompt": {"swift": True, "playbook": True, "facts": True, "safety": True}, "loop": {"max_tool_calls": 12, "max_tool_calls_thinking": 40, "break_with": "tool_choice", "ask_when_vague": True},
           "verify": {"mode": "shadow", "slot": 3, "min_words": 12, "timeout_s": 12, "max_tokens": 300}, "budget": {"normal": [90, 150, 240], "code": [300, 480, 600], "crash": [300, 600, 900]},
           "protect": {"enabled": True, "screen": True, "extra_paths": ["~/Work/important"]}, "guard": {"mode": "off"},
+          "sampling": {"enabled": False, **{f"{m}_{k}": v for m, vals in (("chat", (0.7, 0.8, 20, 0.0, 1.5)), ("think", (1.0, 0.95, 20, 0.0, 1.5)), ("code", (0.6, 0.95, 20, 0.0, 0.0)))
+                                            for k, v in zip(("temperature", "top_p", "top_k", "min_p", "presence_penalty"), vals)}},
           "health": {"interval_s": 5, "fail_limit": 3, "crash_limit": 5, "crash_window_s": 600, "failed_retry_s": 600, "backoff_s": [5, 15]}}
-RANGES = {"model.context": [4096, 262144], "loop.max_tool_calls": [1, 200], "loop.max_tool_calls_thinking": [1, 500], "verify.min_words": [1, 500], "verify.timeout_s": [1, 120],
+RANGES = {**{f"sampling.{m}_{k}": r for m in ("chat", "think", "code") for k, r in (("temperature", [0.0, 2.0]), ("top_p", [0.0, 1.0]), ("top_k", [0, 200]), ("min_p", [0.0, 1.0]), ("presence_penalty", [-2.0, 2.0]))},
+          "model.context": [4096, 262144], "loop.max_tool_calls": [1, 200], "loop.max_tool_calls_thinking": [1, 500], "verify.min_words": [1, 500], "verify.timeout_s": [1, 120],
           "verify.max_tokens": [50, 2000], "health.interval_s": [0.1, 60], "health.fail_limit": [1, 20], "health.crash_limit": [1, 50], "health.crash_window_s": [5, 3600],
           "health.failed_retry_s": [1, 7200], "llama.slots": [1, 8], "llama.slot_similarity": [0.0, 1.0]}
 MODELS = {"models": [{"path": "/m/Qwen-A.gguf", "name": "Qwen-A.gguf", "size_mib": 13000, "current": True, "valid": True},
@@ -73,6 +76,36 @@ def sets(sandbox, path=None):
 
 
 # ---------------------------------------------------------------- Model
+
+
+def sampling_spins(p, label):
+    return [r for r in p.rows(Adw.SpinRow) if r.get_title() == label]
+
+
+def test_sampling_is_off_by_default_and_shows_qwens_values_in_three_sets(ohm, open_page):
+    p = open_page("ohm-model")
+    assert not p.row("Use these sampling values", Adw.SwitchRow).get_active()
+    assert [r.get_title() for r in p.rows(Adw.ExpanderRow)] == ["Everyday replies", "Thinking about code or a crash", "Other thinking"]
+    assert [r.get_value() for r in sampling_spins(p, "Temperature")] == [0.7, 0.6, 1.0]          # chat, code, think: the order of SAMPLING_SETS
+    assert [r.get_value() for r in sampling_spins(p, "Presence penalty")] == [1.5, 0.0, 1.5]
+    assert [r.get_value() for r in sampling_spins(p, "Top-k")] == [20, 20, 20]
+
+
+def test_the_sampling_switch_and_values_are_written_through_ohm(ohm, open_page, sandbox):
+    p = open_page("ohm-model")
+    p.switch("Use these sampling values", True)
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "sampling.enabled", "true"]]
+    first = sampling_spins(p, "Temperature")[0]; first.set_value(0.55); spin()
+    sampling_spins(p, "Top-k")[1].set_value(40); spin()
+    p.page.flush_pending()
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "sampling.chat_temperature", "0.55"], ["ohm", "config", "set", "sampling.code_top_k", "40"]]
+
+
+def test_an_older_ohm_without_sampling_shows_no_sampling_group(ohm, open_page, sandbox):
+    d = json.loads(sandbox.run_output[("ohm", "config", "--json")]); d["config"].pop("sampling")
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(d)
+    p = open_page("ohm-model")
+    assert not p.has_row("Use these sampling values") and p.has_row("Context size")
 
 
 def test_the_model_page_lists_the_files(ohm, sandbox, open_page):

@@ -68,6 +68,8 @@ class OhmModelPage(OhmPage):
         self.num(g, "model.context", "Context size", "Tokens it can hold at once; applies the next time the model loads", 4096)
         self.add(g)
 
+        self.sampling_group()
+
         self.list = Adw.PreferencesGroup(title="Available models", description=f"Put a model's .gguf file in {self.models_dir} and it shows up here.")
         self.add(self.list)
         for m in models:
@@ -82,6 +84,30 @@ class OhmModelPage(OhmPage):
         rescan = Adw.ButtonRow(title="Look again", start_icon_name="view-refresh-symbolic")
         rescan.connect("activated", lambda _r: self.rebuild())
         group_add(self.list, rescan)
+
+    SAMPLING_SETS = (("chat", "Everyday replies", "Thinking off: nearly every request from Hermes"), ("code", "Thinking about code or a crash", "Precise, technical work"),
+                     ("think", "Other thinking", "For example a message that starts with /think"))
+    SAMPLING_FIELDS = (("temperature", "Temperature", "Higher is more random", 0.05, 2), ("top_p", "Top-p", "Only the most likely words that add up to this share are considered", 0.05, 2),
+                       ("top_k", "Top-k", "Only this many most likely words are considered (0 = no limit)", 1, 0), ("min_p", "Min-p", "Drop words less likely than this share of the best one", 0.01, 2),
+                       ("presence_penalty", "Presence penalty", "Positive: avoids repeating itself; negative: repeats more", 0.1, 1))
+
+    def sampling_group(self):
+        """Sampling: the router fills in these values when the client sends none (Hermes sends none). Off = llama-server's own defaults. Hidden for an older ohm without it."""
+        if "sampling" not in self.cfg:
+            return
+        g = Adw.PreferencesGroup(title="Sampling", description="How the model picks its words. Hermes sends no sampling settings, so without this the model runs on llama-server's own defaults "
+                                 "(temperature 1.0, top-p 0.95, no repeat penalty). Switched on, the router fills in the values below for anything the client leaves out. The starting values are "
+                                 "Qwen's recommendations for this model. Applies to the next message.")
+        g.add(switch_row("Use these sampling values", "Off: llama-server's own defaults", self.cfg["sampling"]["enabled"], lambda on: self.set_now("sampling.enabled", on)))
+        for prefix, title, sub in self.SAMPLING_SETS:
+            ex = Adw.ExpanderRow(title=title, subtitle=sub)
+            for key, label, hint, step, digits in self.SAMPLING_FIELDS:
+                path = f"sampling.{prefix}_{key}"
+                lo, hi = self.limits(path, (0, 100))
+                ex.add_row(spin_row(label, hint, lo, hi, step, self.cfg["sampling"][f"{prefix}_{key}"],
+                                    lambda v, p=path, dg=digits: self.set(p, round(v, 3) if dg else int(v)), digits))
+            g.add(ex)
+        self.add(g)
 
     def confirm_use(self, m):
         body = f"{m['name']} replaces the model in use. It loads in about half a minute, and Hermes is unavailable meanwhile."
