@@ -697,6 +697,8 @@ WINDOW_PREFIXES = ("general:", "decoration:", "dwindle:", "master:", "scrolling:
 WINDOW_TRANSPARENCY = ["omarchy", "hyprland", "window", "transparency"]
 WINDOW_CORNERS = ["omarchy", "hyprland", "corners"]
 CORNER_MODES = [("Follow the theme", "theme"), ("Sharp", "sharp"), ("Rounded", "rounded")]
+CORNER_SHAPES = [("Circle", "circle"), ("Squircle", "squircle")]
+CORNER_POWERS = {"circle": 2.0, "squircle": 4.0}
 NO_ANIMATIONS_FLAG = HOME / ".local" / "state" / "omarchy" / "toggles" / "hypr" / "no-animations.lua"
 TRANSPARENCY_MODES = [("Opaque", "opaque"), ("Transparent", "transparent"), ("Glassy", "glassy")]
 
@@ -770,6 +772,14 @@ class WindowsPage(Page):
                          f"Has no effect while Window corners is set to {corners}"),
                         0, 30, 1, cur("decoration:rounding", 0), 0,
                         setter("decoration:rounding")))
+        # Hyprland's `decoration:rounding_power` shapes the corner: 2 is a true circle, 4 a squircle (a squared circle: flatter sides, tighter bends).
+        power = float(cur("decoration:rounding_power", 2.0) or 2.0)
+        g.add(combo_row("Corner shape",
+                        ("Has no effect while Window corners is set to " + corners if corners != "theme" else
+                         "Circle: the usual round corner. Squircle: a squared circle, flatter along the sides" +
+                         ("" if power in CORNER_POWERS.values() else f" (now {power:g}, set outside this app)")),
+                        [l for l, _ in CORNER_SHAPES], "squircle" if power >= 3.5 else "circle", lambda v: h.set("decoration:rounding_power", CORNER_POWERS[v]),
+                        [v for _, v in CORNER_SHAPES]))
         self.border_rows(g)
         self.add(g)
 

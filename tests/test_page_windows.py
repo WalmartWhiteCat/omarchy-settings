@@ -98,6 +98,26 @@ def test_window_corners_default_to_following_the_theme(sandbox, open_page):
     assert "Has no effect" not in (p.row("Corner rounding").get_subtitle() or "")
 
 
+def test_corner_shape_is_circle_or_squircle_through_hyprlands_rounding_power(sandbox, open_page):
+    p = open_page("windows")
+    assert shown(p.row("Corner shape", Adw.ComboRow)) == "Circle"
+    p.choose("Corner shape", "Squircle"); p.save()
+    assert p.saved()["hyprland"]["decoration:rounding_power"] == 4.0 and "rounding_power = 4" in p.lua()
+    p.choose("Corner shape", "Circle"); p.save()
+    assert p.saved()["hyprland"]["decoration:rounding_power"] == 2.0
+
+
+def test_corner_shape_shows_a_saved_squircle_and_names_a_value_set_elsewhere(sandbox, open_page):
+    assert shown(open_page("windows", {"hyprland": {"decoration:rounding_power": 4.0}}).row("Corner shape", Adw.ComboRow)) == "Squircle"
+    odd = open_page("windows", {"hyprland": {"decoration:rounding_power": 3.0}})
+    assert shown(odd.row("Corner shape", Adw.ComboRow)) == "Circle" and "now 3" in odd.row("Corner shape").get_subtitle()
+
+
+def test_corner_shape_says_when_omarchys_window_corners_overrides_it(sandbox, open_page):
+    sandbox.run_output[CORNERS] = "rounded\n"
+    assert "Has no effect while Window corners is set to rounded" in open_page("windows").row("Corner shape").get_subtitle()
+
+
 def test_animations_switch_says_when_omarchys_toggle_overrides_it(sandbox, open_page):
     from osettings import pages_look as pl
     assert "overrides" not in (open_page("windows").row("Animations").get_subtitle() or "")
