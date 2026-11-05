@@ -206,6 +206,33 @@ def test_running_programs_are_this_users_process_names():
     assert names and names == sorted(names, key=str.casefold) and all(n == n.strip() and n for n in names)
 
 
+APP = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-Hyprland-steam-1a2b.scope\n"
+DAEMON = "0::/user.slice/user-1000.slice/user@1000.service/session.slice/pipewire-pulse.service\n"
+
+
+def test_background_services_and_helpers_are_not_offered():
+    ok = lambda n, cg=APP: po.is_program(n, cg)
+    assert ok("steam") and ok("Hyprland.exe") and ok("osu!") and ok("SkyrimSE.exe")
+    for daemon in ("pipewire-pulse", "bt-agent", "wireplumber", "xdg-desktop-por", "hermes-ollama-p"):
+        assert not po.is_program(daemon, DAEMON), daemon
+    assert not po.is_program("pipewire", "0::/user.slice/user-1000.slice/user@1000.service/init.scope\n")
+    assert not po.is_program("Xwayland", "0::/user.slice/user@1000.service/session.slice/wayland-wm@hyprland.desktop.service\n")
+    assert not po.is_program("sh", "0::/user.slice/session-1.scope\n")
+    for helper in ("bash", "python3", "sleep", "omarchy-launch-", "dbus-broker", "gvfsd", "systemd", "(sd-pam)", ""):
+        assert not ok(helper), helper
+    assert not ok("bazaar-daemon") and not ok("udiskie")
+
+
+def test_without_cgroup_information_only_the_name_filter_applies():
+    assert po.is_program("steam", "") and not po.is_program("bash", "")
+    assert po.launched_as_app("0::/user.slice/app-gtk\\x2dlaunch-ab12.scope (deleted)\n")
+
+
+def test_the_picker_hides_this_machines_background_services():
+    names = po.running_programs()
+    assert not {"pipewire", "pipewire-pulse", "wireplumber", "bt-agent", "dbus-broker", "systemd"} & set(names)
+
+
 # ---------------------------------------------------------------- Memory
 
 

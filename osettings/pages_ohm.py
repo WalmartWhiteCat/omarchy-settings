@@ -56,17 +56,44 @@ def ohm_flags():
     return paused, ends, lock
 
 
+# Tools that run inside an app's scope but are never what you start or stop on purpose: shells, coreutils, helpers.
+NOT_PROGRAMS = {"bash", "sh", "dash", "zsh", "fish", "python", "python3", "sleep", "cut", "head", "tail", "sort", "grep", "awk", "sed",
+                "cat", "less", "tmux", "ssh", "socat", "inotifywait", "gdbus", "systemctl", "journalctl", "chrome_crashpad", "udiskie"}
+NOT_PROGRAM_PREFIXES = ("omarchy-", "xdg-", "gvfs", "dbus", "at-spi", "p11-kit", "gnome-keyring", "systemd", "(sd-")
+
+
+def launched_as_app(cgroup_text):
+    """Was this started as an application (by the launcher, Steam or a terminal) rather than as a background service or part of the session?
+    systemd puts apps in `app-*.scope` units and daemons (pipewire, bluetooth agents, portals) in `*.service`. Unknown (no cgroup info) counts as yes."""
+    unit = cgroup_text.strip().splitlines()[-1].rsplit("/", 1)[-1].removesuffix(" (deleted)") if cgroup_text.strip() else ""
+    return not unit or (unit.startswith("app-") and (unit.endswith(".scope") or ".service" in unit))
+
+
+def is_program(name, cgroup_text):
+    """True for something a person might start or stop on purpose: not a system daemon, shell or helper."""
+    low = name.lower()
+    return bool(name) and low not in NOT_PROGRAMS and not low.startswith(NOT_PROGRAM_PREFIXES) and not low.endswith("-daemon") and launched_as_app(cgroup_text)
+
+
 def running_programs():
-    """Names of the programs this user is running, the way the controller matches games (the first 15 characters of the process name)."""
+    """Names of the programs this user has started, the way the controller matches games (the first 15 characters of the process name).
+    Background services and session plumbing (pipewire, bt-agent, portals, dbus...) are left out; a name can still be typed in by hand."""
     names = set()
     for d in os.listdir("/proc"):
         if d.isdigit():
             try:
-                if os.stat(f"/proc/{d}").st_uid == os.getuid():
-                    names.add(open(f"/proc/{d}/comm").read().strip())
+                if os.stat(f"/proc/{d}").st_uid != os.getuid():
+                    continue
+                name = open(f"/proc/{d}/comm").read().strip()
+                try:
+                    cg = open(f"/proc/{d}/cgroup").read()
+                except OSError:
+                    cg = ""
+                if is_program(name, cg):
+                    names.add(name)
             except OSError:
                 pass
-    return sorted((n for n in names if n), key=str.casefold)
+    return sorted(names, key=str.casefold)
 
 
 def clock(epoch):
@@ -309,7 +336,7 @@ class OhmControlPage(OhmPage):
             self.set_games([*self.cfg["game_mode"]["processes"], name])
 
     def pick_game(self):
-        dialog = Adw.AlertDialog(heading="Pick a program", body="Start the game first, then pick it here. Its name is what the model watches for.")
+        dialog = Adw.AlertDialog(heading="Pick a program", body="Start the game first, then pick it here. Background services are not listed; to watch one of those, type its name in the box instead.")
         dialog.add_response("cancel", "Close")
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
