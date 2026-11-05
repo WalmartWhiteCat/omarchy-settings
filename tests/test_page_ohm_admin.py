@@ -34,13 +34,13 @@ def ohm(sandbox, monkeypatch, tmp_path):
     d["ranges"] = {**d["ranges"], **RANGES}
     d["enums"] = {"loop.break_with": ["tool_choice", "drop_tools"], "verify.mode": ["off", "shadow", "append"], "guard.mode": ["off", "readonly"]}
     out = sandbox.run_output
-    out[("moe-local", "config", "--json")] = json.dumps(d)
-    out[("moe-local", "autostart", "status")] = "starts at login: yes"
-    out[("moe-local", "models", "--json")] = json.dumps(MODELS)
-    out[("moe-local", "lessons", "--json")] = json.dumps(LESSONS)
-    out[("moe-local", "verify", "-n", "3")] = "mode: shadow\n4 checks: ok 4"
+    out[("ohm", "config", "--json")] = json.dumps(d)
+    out[("ohm", "autostart", "status")] = "starts at login: yes"
+    out[("ohm", "models", "--json")] = json.dumps(MODELS)
+    out[("ohm", "lessons", "--json")] = json.dumps(LESSONS)
+    out[("ohm", "verify", "-n", "3")] = "mode: shadow\n4 checks: ok 4"
     pb = tmp_path / "playbook.md"
-    out[("moe-local", "playbook", "--json")] = json.dumps({"path": str(pb), "custom": False, "text": "- be brief", "default": "- be brief"})
+    out[("ohm", "playbook", "--json")] = json.dumps({"path": str(pb), "custom": False, "text": "- be brief", "default": "- be brief"})
     po.OHM_STATE.mkdir(parents=True, exist_ok=True)
     return callbacks(monkeypatch, po, __import__("osettings.pages_ohm_admin", fromlist=["x"]))
 
@@ -69,7 +69,7 @@ def answer(p, response="ok", typed=None):
 
 
 def sets(sandbox, path=None):
-    return [c for batch in sandbox.run_chain for c in batch if c[:3] == ["moe-local", "config", "set"] and (path is None or c[3] == path)]
+    return [c for batch in sandbox.run_chain for c in batch if c[:3] == ["ohm", "config", "set"] and (path is None or c[3] == path)]
 
 
 # ---------------------------------------------------------------- Model
@@ -92,18 +92,18 @@ def test_switching_asks_first_and_warns_about_the_projector(ohm, open_page, sand
     assert sandbox.run_async == []
     next(w for w in widgets(p.row("Qwen-B.gguf", Adw.ActionRow)) if isinstance(w, Gtk.Button)).emit("clicked")
     answer(p, "ok")
-    assert sandbox.run_async[-1] == ["moe-local", "models", "use", "/m/Qwen-B.gguf", "--drop-mmproj"]
+    assert sandbox.run_async[-1] == ["ohm", "models", "use", "/m/Qwen-B.gguf", "--drop-mmproj"]
 
 
 def test_without_a_projector_nothing_is_dropped(sandbox, ohm, open_page):
-    d = json.loads(sandbox.run_output[("moe-local", "config", "--json")])
+    d = json.loads(sandbox.run_output[("ohm", "config", "--json")])
     d["config"]["llama"]["extra_args"] = ["-b", "2048"]
-    sandbox.run_output[("moe-local", "config", "--json")] = json.dumps(d)
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(d)
     p = page(open_page, sandbox, "ohm-model")
     next(w for w in widgets(p.row("Qwen-B.gguf", Adw.ActionRow)) if isinstance(w, Gtk.Button)).emit("clicked")
     assert "vision projector" not in dialog(p).get_body()
     answer(p, "ok")
-    assert sandbox.run_async[-1] == ["moe-local", "models", "use", "/m/Qwen-B.gguf"]
+    assert sandbox.run_async[-1] == ["ohm", "models", "use", "/m/Qwen-B.gguf"]
 
 
 def test_a_refused_switch_says_why(ohm, open_page, sandbox):
@@ -118,7 +118,7 @@ def test_the_context_size(ohm, open_page, sandbox):
     p = page(open_page, sandbox, "ohm-model")
     p.number("Context size", 65536)
     p.page.flush_pending()
-    assert sets(sandbox, "model.context")[-1] == ["moe-local", "config", "set", "model.context", "65536"]
+    assert sets(sandbox, "model.context")[-1] == ["ohm", "config", "set", "model.context", "65536"]
 
 
 # ---------------------------------------------------------------- Prompt and playbook
@@ -141,7 +141,7 @@ def test_the_time_limits_are_sent_as_the_whole_list(ohm, open_page, sandbox):
     p = page(open_page, sandbox, "ohm-prompt")
     p.number("Coding: firmer warning", 500)
     p.page.flush_pending()
-    assert sets(sandbox, "budget.code")[-1] == ["moe-local", "config", "set", "budget.code", "[300, 500, 600]"]
+    assert sets(sandbox, "budget.code")[-1] == ["ohm", "config", "set", "budget.code", "[300, 500, 600]"]
 
 
 def test_the_second_opinion(ohm, open_page, sandbox):
@@ -158,13 +158,13 @@ def test_lessons_are_accepted_or_rejected_by_you(ohm, open_page, sandbox):
     assert not p.has_row("Stop after the first command.")      # accepted ones aren't suggestions any more
     add, no = [w for w in widgets(row) if isinstance(w, Gtk.Button)]
     add.emit("clicked")
-    assert sandbox.run_async[-1] == ["moe-local", "lessons", "accept", "1"]
+    assert sandbox.run_async[-1] == ["ohm", "lessons", "accept", "1"]
     no.emit("clicked")
-    assert sandbox.run_async[-1] == ["moe-local", "lessons", "reject", "1"]
+    assert sandbox.run_async[-1] == ["ohm", "lessons", "reject", "1"]
 
 
 def test_no_lessons_says_so(sandbox, ohm, open_page):
-    sandbox.run_output[("moe-local", "lessons", "--json")] = "[]"
+    sandbox.run_output[("ohm", "lessons", "--json")] = "[]"
     assert open_page("ohm-prompt").has_row("No suggestions waiting")
 
 
@@ -176,8 +176,8 @@ def test_saving_the_playbook_makes_your_own_copy(ohm, sandbox, open_page, tmp_pa
 
 
 def test_going_back_to_the_built_in_playbook_asks(sandbox, ohm, open_page):
-    pb = json.loads(sandbox.run_output[("moe-local", "playbook", "--json")])
-    sandbox.run_output[("moe-local", "playbook", "--json")] = json.dumps({**pb, "custom": True, "text": "- mine"})
+    pb = json.loads(sandbox.run_output[("ohm", "playbook", "--json")])
+    sandbox.run_output[("ohm", "playbook", "--json")] = json.dumps({**pb, "custom": True, "text": "- mine"})
     p = page(open_page, sandbox, "ohm-prompt")
     assert not p.has_row("Save as my playbook") is False
     p.press("Go back to the built-in playbook")
@@ -186,7 +186,7 @@ def test_going_back_to_the_built_in_playbook_asks(sandbox, ohm, open_page):
     assert sandbox.run_async == []
     p.press("Go back to the built-in playbook")
     answer(p, "ok")
-    assert sandbox.run_async[-1] == ["moe-local", "playbook", "reset"]
+    assert sandbox.run_async[-1] == ["ohm", "playbook", "reset"]
 
 
 # ---------------------------------------------------------------- Safety and watcher
@@ -195,9 +195,9 @@ def test_going_back_to_the_built_in_playbook_asks(sandbox, ohm, open_page):
 def test_the_safety_page_says_what_is_on(ohm, open_page, sandbox):
     p = page(open_page, sandbox, "ohm-safety")
     assert "blocks deleting your home folder" in p.row("Safety screen", Adw.ActionRow).get_subtitle()
-    d = json.loads(sandbox.run_output[("moe-local", "config", "--json")])
+    d = json.loads(sandbox.run_output[("ohm", "config", "--json")])
     d["config"]["protect"]["screen"] = False
-    sandbox.run_output[("moe-local", "config", "--json")] = json.dumps(d)
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(d)
     assert p.page is not None and "OFF" in page(open_page, sandbox, "ohm-safety").row("Safety screen", Adw.ActionRow).get_subtitle()
 
 
@@ -222,7 +222,7 @@ def test_the_watcher_and_the_server_settings(ohm, open_page, sandbox):
     p.number("Conversations kept ready", 2)
     p.page.flush_pending()
     batch = sandbox.run_chain[-1]
-    assert ["moe-local", "config", "set", "health.interval_s", "10"] in batch and ["moe-local", "config", "set", "llama.slots", "2"] in batch
+    assert ["ohm", "config", "set", "health.interval_s", "10"] in batch and ["ohm", "config", "set", "llama.slots", "2"] in batch
     p.switch("Give each chat its own slot", False)
     assert sets(sandbox, "llama.pin_slots")[-1][4] == "false"
 
@@ -260,16 +260,16 @@ def test_a_protection_stays_on_until_the_typed_word_is_right(ohm, open_page, san
 
 
 def test_turning_a_protection_back_on_needs_no_questions(sandbox, ohm, open_page):
-    d = json.loads(sandbox.run_output[("moe-local", "config", "--json")])
+    d = json.loads(sandbox.run_output[("ohm", "config", "--json")])
     d["config"]["prompt"]["safety"] = False
-    sandbox.run_output[("moe-local", "config", "--json")] = json.dumps(d)
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(d)
     p = page(open_page, sandbox, "ohm-danger")
     assert not p.row("The safety rules in its instructions is on").get_active()
     p.switch("The safety rules in its instructions is on", True)
     assert sets(sandbox, "prompt.safety")[-1][4] == "true" and not isinstance(p.win.get_visible_dialog(), Adw.AlertDialog)
 
 
-@pytest.mark.parametrize("title, cmd", [("Delete the saved conversations", ["moe-local", "cache", "clear"]), ("Clear the lesson list", ["moe-local", "lessons", "clear"])])
+@pytest.mark.parametrize("title, cmd", [("Delete the saved conversations", ["ohm", "cache", "clear"]), ("Clear the lesson list", ["ohm", "lessons", "clear"])])
 def test_deleting_things_asks_and_then_runs(ohm, open_page, sandbox, title, cmd):
     p = page(open_page, sandbox, "ohm-danger")
     next(w for w in widgets(p.row(title, Adw.ActionRow)) if isinstance(w, Gtk.Button)).emit("clicked")
@@ -293,12 +293,12 @@ def test_deleting_a_model_file_lists_only_the_others_and_needs_the_word(ohm, ope
     assert sandbox.run_async == []
     p.press("Delete this file")
     answer(p, "ok", typed="DELETE")
-    assert sandbox.run_async[-1] == ["moe-local", "models", "delete", "/m/Qwen-B.gguf", "--yes"]
+    assert sandbox.run_async[-1] == ["ohm", "models", "delete", "/m/Qwen-B.gguf", "--yes"]
 
 
-@pytest.mark.parametrize("title, word, cmd", [("Put every Qwen3.6-OHM setting back to its default", "RESET", ["moe-local", "config", "reset", "--yes"]),
-                                              ("Remove it from Hermes", "REMOVE", ["moe-local", "hermes-unregister"]),
-                                              ("Remove its background services", "UNINSTALL", ["moe-local", "uninstall-services"])])
+@pytest.mark.parametrize("title, word, cmd", [("Put every Qwen3.6-OHM setting back to its default", "RESET", ["ohm", "config", "reset", "--yes"]),
+                                              ("Remove it from Hermes", "REMOVE", ["ohm", "hermes-unregister"]),
+                                              ("Remove its background services", "UNINSTALL", ["ohm", "uninstall-services"])])
 def test_the_big_ones_need_a_typed_word(ohm, open_page, sandbox, title, word, cmd):
     p = page(open_page, sandbox, "ohm-danger")
     p.press(title)

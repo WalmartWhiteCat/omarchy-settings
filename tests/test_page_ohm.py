@@ -1,4 +1,4 @@
-"""Qwen3.6-OHM pages (Tools): what they show from the files and `moe-local config --json`, and the commands they run."""
+"""Qwen3.6-OHM pages (Tools): what they show from the files and `ohm config --json`, and the commands they run."""
 import json
 import time
 
@@ -26,9 +26,9 @@ def describe(games=(), steps=None):
 
 @pytest.fixture
 def ohm(sandbox, monkeypatch):
-    """OHM installed: `moe-local config --json` answers, autostart is on, no flags, a fresh state.json."""
-    sandbox.run_output[("moe-local", "config", "--json")] = json.dumps(describe())
-    sandbox.run_output[("moe-local", "autostart", "status")] = "starts at login: yes (enabled, enabled)"
+    """OHM installed: `ohm config --json` answers, autostart is on, no flags, a fresh state.json."""
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(describe())
+    sandbox.run_output[("ohm", "autostart", "status")] = "starts at login: yes (enabled, enabled)"
     po.OHM_STATE.mkdir(parents=True, exist_ok=True)
     write_state()
     return callbacks(monkeypatch, po)
@@ -83,9 +83,9 @@ def test_the_off_switch(ohm, open_page, sandbox):
     p = open_page("ohm")
     assert not p.row("Keep the model off").get_active()
     p.switch("Keep the model off", True)
-    assert sandbox.run_async[-1] == ["moe-local", "pause"]
+    assert sandbox.run_async[-1] == ["ohm", "pause"]
     p.switch("Keep the model off", False)
-    assert sandbox.run_async[-1] == ["moe-local", "resume"]
+    assert sandbox.run_async[-1] == ["ohm", "resume"]
 
 
 def test_the_switch_follows_the_pause_flag_and_a_timed_pause_shows_its_end(ohm, open_page, sandbox):
@@ -99,7 +99,7 @@ def test_the_switch_follows_the_pause_flag_and_a_timed_pause_shows_its_end(ohm, 
     assert not p.row("Keep the model off").get_active() and timed.get_visible() and "Until " in timed.get_subtitle() and "(in 6" in timed.get_subtitle()      # 60 or 59 minutes
     assert len(sandbox.run_async) == n      # showing a state sent no command
     next(w for w in widgets(timed) if isinstance(w, Gtk.Button)).emit("clicked")
-    assert sandbox.run_async[-1] == ["moe-local", "resume"]
+    assert sandbox.run_async[-1] == ["ohm", "resume"]
     (po.OHM_STATE / "pause").unlink()
     p.page.refresh()
     assert not timed.get_visible()
@@ -108,12 +108,12 @@ def test_the_switch_follows_the_pause_flag_and_a_timed_pause_shows_its_end(ohm, 
 def test_switching_off_for_a_set_time(ohm, open_page, sandbox):
     p = open_page("ohm")
     p.press("Switch off for that long")
-    assert sandbox.run_async[-1] == ["moe-local", "pause", "--for", "30m"]
+    assert sandbox.run_async[-1] == ["ohm", "pause", "--for", "30m"]
     p.choose("Switch it off for", "2 hours")
     p.press("Switch off for that long")
-    assert sandbox.run_async[-1] == ["moe-local", "pause", "--for", "2h"]
+    assert sandbox.run_async[-1] == ["ohm", "pause", "--for", "2h"]
     p.enter("Or type a length (30m, 2h, 1h30m)", "45m")
-    assert sandbox.run_async[-1] == ["moe-local", "pause", "--for", "45m"]
+    assert sandbox.run_async[-1] == ["ohm", "pause", "--for", "45m"]
     n = len(sandbox.run_async)
     p.enter("Or type a length (30m, 2h, 1h30m)", "   ")
     assert len(sandbox.run_async) == n      # nothing typed, nothing run
@@ -132,13 +132,13 @@ def test_the_lock(ohm, open_page, sandbox):
     steps = p.row("Step", Adw.ComboRow)
     assert [steps.get_model().get_string(i) for i in range(3)] == ["Step 1: 2700 MiB", "Step 2: 5100 MiB", "Step 3: 7500 MiB"]
     p.choose("Step", "Step 2: 5100 MiB")
-    assert sandbox.run_async == [] or sandbox.run_async[-1] != ["moe-local", "lock", "2"]      # choosing a step does not lock by itself
+    assert sandbox.run_async == [] or sandbox.run_async[-1] != ["ohm", "lock", "2"]      # choosing a step does not lock by itself
     p.switch("Lock at a step", True)
-    assert sandbox.run_async[-1] == ["moe-local", "lock", "2"]
+    assert sandbox.run_async[-1] == ["ohm", "lock", "2"]
     p.choose("Step", "Step 3: 7500 MiB")
-    assert sandbox.run_async[-1] == ["moe-local", "lock", "3"]
+    assert sandbox.run_async[-1] == ["ohm", "lock", "3"]
     p.switch("Lock at a step", False)
-    assert sandbox.run_async[-1] == ["moe-local", "lock", "off"]
+    assert sandbox.run_async[-1] == ["ohm", "lock", "off"]
 
 
 def test_the_lock_flag_is_shown(ohm, open_page):
@@ -155,8 +155,8 @@ def shown(combo):
 
 
 def test_without_steps_there_is_nothing_to_lock(sandbox, open_page):
-    sandbox.run_output[("moe-local", "config", "--json")] = json.dumps(describe(steps=[]))
-    sandbox.run_output[("moe-local", "autostart", "status")] = "starts at login: no"
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(describe(steps=[]))
+    sandbox.run_output[("ohm", "autostart", "status")] = "starts at login: no"
     p = open_page("ohm")
     assert not p.row("Lock at a step").get_sensitive() and not p.row("Step", Adw.ComboRow).get_sensitive()
 
@@ -165,29 +165,29 @@ def test_start_at_login(ohm, open_page, sandbox):
     p = open_page("ohm")
     assert p.row("Start with the computer").get_active()
     p.switch("Start with the computer", False)
-    assert sandbox.run_async[-1] == ["moe-local", "autostart", "off"]
+    assert sandbox.run_async[-1] == ["ohm", "autostart", "off"]
     p.switch("Start with the computer", True)
-    assert sandbox.run_async[-1] == ["moe-local", "autostart", "on"]
+    assert sandbox.run_async[-1] == ["ohm", "autostart", "on"]
 
 
 def games_written(sandbox):
-    return [c for c in sandbox.run_chain if c and c[0][:4] == ["moe-local", "config", "set", "game_mode.processes"]]
+    return [c for c in sandbox.run_chain if c and c[0][:4] == ["ohm", "config", "set", "game_mode.processes"]]
 
 
 def test_the_game_list(ohm, open_page, sandbox, monkeypatch):
     p = open_page("ohm")
     assert p.has_row("No games on the list")
     p.enter("Add a program (its process name)", "Client-Win64-Sh")
-    assert games_written(sandbox)[-1] == [["moe-local", "config", "set", "game_mode.processes", '["Client-Win64-Sh"]']]
+    assert games_written(sandbox)[-1] == [["ohm", "config", "set", "game_mode.processes", '["Client-Win64-Sh"]']]
     assert p.has_row("Client-Win64-Sh") and not p.has_row("No games on the list")
     p.enter("Add a program (its process name)", "Client-Win64-Sh")      # twice: once
     p.enter("Add a program (its process name)", "  ")
     assert len(games_written(sandbox)) == 1
     p.enter("Add a program (its process name)", "osu!")
-    assert games_written(sandbox)[-1] == [["moe-local", "config", "set", "game_mode.processes", '["Client-Win64-Sh", "osu!"]']]
+    assert games_written(sandbox)[-1] == [["ohm", "config", "set", "game_mode.processes", '["Client-Win64-Sh", "osu!"]']]
     gone = p.row("osu!", Adw.ActionRow)
     next(w for w in widgets(gone) if isinstance(w, Gtk.Button)).emit("clicked")
-    assert games_written(sandbox)[-1] == [["moe-local", "config", "set", "game_mode.processes", '["Client-Win64-Sh"]']] and not p.has_row("osu!")
+    assert games_written(sandbox)[-1] == [["ohm", "config", "set", "game_mode.processes", '["Client-Win64-Sh"]']] and not p.has_row("osu!")
 
 
 def test_picking_a_running_program(ohm, open_page, sandbox, monkeypatch):
@@ -198,7 +198,7 @@ def test_picking_a_running_program(ohm, open_page, sandbox, monkeypatch):
     rows = [w for w in widgets(dialog) if isinstance(w, Adw.ActionRow)]
     assert [r.get_title() for r in rows] == ["Hyprland", "Proton", "steam"]
     next(r for r in rows if r.get_title() == "Proton").emit("activated")
-    assert games_written(sandbox)[-1] == [["moe-local", "config", "set", "game_mode.processes", '["Proton"]']]
+    assert games_written(sandbox)[-1] == [["ohm", "config", "set", "game_mode.processes", '["Proton"]']]
 
 
 def test_running_programs_are_this_users_process_names():
@@ -222,7 +222,7 @@ def test_a_change_is_written_after_a_moment_as_one_command_each(ohm, open_page, 
     p.number("Keep this much free", 2500)
     assert [c for c in sandbox.run_chain] == []      # batched on a short timer
     p.page.flush_pending()
-    assert sandbox.run_chain[-1] == [["moe-local", "config", "set", "vram.cap_mib", "7000"], ["moe-local", "config", "set", "vram.headroom_mib", "2500"]]
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.cap_mib", "7000"], ["ohm", "config", "set", "vram.headroom_mib", "2500"]]
 
 
 def test_a_refusal_is_shown_and_the_page_shows_what_the_file_holds(ohm, open_page, sandbox):
@@ -238,16 +238,16 @@ def test_steps_are_listed_added_and_removed(ohm, open_page, sandbox):
     p = open_page("ohm-memory")
     assert [p.row(f"Step {i}", Adw.SpinRow).get_value() for i in (1, 2, 3)] == [2700, 5100, 7500]
     p.press("Add a step")
-    assert sandbox.run_chain[-1] == [["moe-local", "config", "set", "vram.ramp_steps_mib", "[2700, 5100, 7500, 8500]"]]
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_steps_mib", "[2700, 5100, 7500, 8500]"]]
     assert p.has_row("Step 4")
     remove = next(w for w in widgets(p.row("Step 2", Adw.SpinRow)) if isinstance(w, Gtk.Button) and w.get_tooltip_text() == "Remove this step")
     remove.emit("clicked")
-    assert sandbox.run_chain[-1] == [["moe-local", "config", "set", "vram.ramp_steps_mib", "[2700, 7500, 8500]"]]
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_steps_mib", "[2700, 7500, 8500]"]]
 
 
 def test_the_last_step_cannot_be_removed(sandbox, open_page):
-    sandbox.run_output[("moe-local", "config", "--json")] = json.dumps(describe(steps=[4000]))
-    sandbox.run_output[("moe-local", "autostart", "status")] = "x"
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(describe(steps=[4000]))
+    sandbox.run_output[("ohm", "autostart", "status")] = "x"
     p = open_page("ohm-memory")
     next(w for w in widgets(p.row("Step 1", Adw.SpinRow)) if isinstance(w, Gtk.Button) and w.get_tooltip_text() == "Remove this step").emit("clicked")
     assert sandbox.run_chain == []
@@ -257,23 +257,23 @@ def test_a_step_typed_out_of_order_is_sent_sorted(ohm, open_page, sandbox):
     p = open_page("ohm-memory")
     p.number("Step 1", 6000)
     p.page.flush_pending()
-    assert sandbox.run_chain[-1] == [["moe-local", "config", "set", "vram.ramp_steps_mib", "[5100, 6000, 7500]"]]
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_steps_mib", "[5100, 6000, 7500]"]]
     assert p.page.resort is True
 
 
 def test_steps_can_be_turned_off_and_on(ohm, open_page, sandbox):
     p = open_page("ohm-memory")
     p.switch("Use steps", False)
-    assert sandbox.run_chain[-1] == [["moe-local", "config", "set", "vram.ramp_steps_mib", "[]"]] and not p.has_row("Step 1")
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_steps_mib", "[]"]] and not p.has_row("Step 1")
     p.switch("Use steps", True)
-    assert sandbox.run_chain[-1] == [["moe-local", "config", "set", "vram.ramp_steps_mib", "[2700, 5100, 7500]"]] and p.has_row("Step 3")
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_steps_mib", "[2700, 5100, 7500]"]] and p.has_row("Step 3")
 
 
 def test_restore_unsets_every_memory_setting(ohm, open_page, sandbox):
     p = open_page("ohm-memory")
     p.page.reset()
     cmds = sandbox.run_chain[-1]
-    assert cmds[0][:3] == ["moe-local", "config", "unset"] and {c[3] for c in cmds} == {f"vram.{k}" for k in VRAM}
+    assert cmds[0][:3] == ["ohm", "config", "unset"] and {c[3] for c in cmds} == {f"vram.{k}" for k in VRAM}
 
 
 def test_advanced_timings_are_there_and_use_the_projects_limits(ohm, open_page):
@@ -283,18 +283,18 @@ def test_advanced_timings_are_there_and_use_the_projects_limits(ohm, open_page):
 
 
 def test_the_real_command_answers_in_the_shape_these_pages_read():
-    """Against the installed `moe-local` (skipped without it, or with an older one)."""
+    """Against the installed `ohm` (skipped without it, or with an older one)."""
     import shutil
     import subprocess
 
     from .conftest import REAL_POPEN
 
-    if not shutil.which("moe-local"):
-        pytest.skip("moe-local isn't installed")
-    out = REAL_POPEN(["moe-local", "config", "--json"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).communicate(timeout=30)[0]
+    if not shutil.which("ohm"):
+        pytest.skip("ohm isn't installed")
+    out = REAL_POPEN(["ohm", "config", "--json"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).communicate(timeout=30)[0]
     try:
         d = json.loads(out)
     except ValueError:
-        pytest.skip("this moe-local has no config --json yet")
+        pytest.skip("this ohm has no config --json yet")
     assert {"config", "defaults", "ranges", "restart_keys"} <= set(d) and "ramp_steps_mib" in d["config"]["vram"] and "processes" in d["config"]["game_mode"]
     assert set(d["config"]["vram"]) <= set(d["defaults"]["vram"]) and "vram.cap_mib" in d["ranges"]

@@ -175,7 +175,7 @@ def sandbox(tmp_path, monkeypatch, request):
         "NOTEBOOK_CONFIG": home / ".config/omarchy-notebook/config.json",
         "NOTEBOOK_BIN": home / ".local/bin/omarchy-notebook",
         "OHM_STATE": home / ".local/state/moe-local",
-        "OHM_BIN": home / ".local/bin/moe-local",
+        "OHM_BIN": home / ".local/bin/ohm",
         "THUMB_DIR": home / ".cache/omarchy-settings/video-thumbs",
     }
     for mod in MODULES:
@@ -188,9 +188,6 @@ def sandbox(tmp_path, monkeypatch, request):
     for marker in ("NOTEBOOK_BIN", "OHM_BIN"):
         paths[marker].parent.mkdir(parents=True, exist_ok=True)
         paths[marker].write_text("")
-
-    # pages_ohm asks shutil.which whether moe-local is on the PATH; the machine's real one must not count in the tests (only that module's name is replaced)
-    monkeypatch.setattr(pages_ohm, "shutil", types.SimpleNamespace(which=lambda name: None))
 
     calls = Calls()
 

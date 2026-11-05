@@ -1,16 +1,15 @@
 """Qwen3.6-OHM (the local model that runs beside the desktop): its controls and its memory settings.
 
-These pages are a front end for the `moe-local` command; the project decides what is valid:
-  moe-local config --json          every setting, its default, range and choices
-  moe-local config set PATH JSON   one change, checked, written with the file's comments kept
-  moe-local pause [--for 30m] / resume, lock N|off, autostart on|off|status
+These pages are a front end for the `ohm` command; the project decides what is valid:
+  ohm config --json          every setting, its default, range and choices
+  ohm config set PATH JSON   one change, checked, written with the file's comments kept
+  ohm pause [--for 30m] / resume, lock N|off, autostart on|off|status
 The running controller and router pick a changed config.toml up within a couple of seconds, so most changes act at once. What
 the running model server was started with (the model file, llama options) waits for its next start and is listed on the Control page.
 State is read from the files the controller writes (state.json, and the pause and lock-step flags)."""
 
 import json
 import os
-import shutil
 import time
 
 from gi.repository import Adw, GLib, Gtk
@@ -19,7 +18,7 @@ from .core import HOME, Page, clear_group, combo_row, group_add, icon_button, re
 from .pages_widgets import DebouncedWrites
 
 OHM_STATE = HOME / ".local/state/moe-local"
-OHM_BIN = HOME / ".local/bin/moe-local"
+OHM_BIN = HOME / ".local/bin/ohm"
 PAUSE_PRESETS = [("15 minutes", "15m"), ("30 minutes", "30m"), ("1 hour", "1h"), ("2 hours", "2h"), ("4 hours", "4h"), ("8 hours", "8h")]
 STATE_WORDS = {"RUNNING": "Running", "STARTING": "Loading", "YIELDED": "Waiting for room", "PAUSED": "Off", "GAME": "Off (a game is running)",
                "FAILED": "Failed, will try again", "NO_GPU": "GPU unreadable"}
@@ -27,9 +26,9 @@ APPLY_NOTE = "Applies within a couple of seconds."
 
 
 def ohm_describe():
-    """`moe-local config --json` as a dict, or None when the command is missing or answers with something else."""
+    """`ohm config --json` as a dict, or None when the command is missing or answers with something else."""
     try:
-        d = json.loads(run(["moe-local", "config", "--json"]))
+        d = json.loads(run(["ohm", "config", "--json"]))
     except ValueError:
         return None
     return d if isinstance(d, dict) and "config" in d and "ranges" in d else None
@@ -79,11 +78,11 @@ def minutes_left(epoch):
 
 
 class OhmPage(DebouncedWrites, Page):
-    """Base: fetches the settings, writes changes through `moe-local config set` (batched on a short timer), refreshes what it shows."""
+    """Base: fetches the settings, writes changes through `ohm config set` (batched on a short timer), refreshes what it shows."""
 
     @classmethod
     def available(cls):
-        return OHM_BIN.exists() or shutil.which("moe-local") is not None
+        return OHM_BIN.exists()      # the launcher its installer makes; any other program called "ohm" on the PATH must not make this page appear
 
     def load(self):
         self.hook_unrealize()
@@ -94,7 +93,7 @@ class OhmPage(DebouncedWrites, Page):
         self.timer = None
         self.d = ohm_describe()
         if self.d is None:
-            self.add(Adw.PreferencesGroup(description="Qwen3.6-OHM is installed but `moe-local` isn't answering. Try `moe-local doctor` in a terminal. "
+            self.add(Adw.PreferencesGroup(description="Qwen3.6-OHM is installed but `ohm` isn't answering. Try `ohm doctor` in a terminal. "
                                           "Nothing here can be changed until it answers."))
             return False
         self.cfg = self.d["config"]
@@ -143,7 +142,7 @@ class OhmPage(DebouncedWrites, Page):
         self._pending = None
         items, self.pend = list(self.pend.items()), {}
         if items:
-            run_chain([["moe-local", "config", "set", p, json.dumps(v)] for p, v in items], self.after_set)
+            run_chain([["ohm", "config", "set", p, json.dumps(v)] for p, v in items], self.after_set)
         return False
 
     def after_set(self, failures):
@@ -246,20 +245,20 @@ class OhmControlPage(OhmPage):
             self.syncing = False
 
     def autostart_on(self):
-        return "starts at login: yes" in run(["moe-local", "autostart", "status"])
+        return "starts at login: yes" in run(["ohm", "autostart", "status"])
 
     # ---- the switches
     def on_off(self, on):
         if self.syncing:
             return
-        run_async(["moe-local", "pause"] if on else ["moe-local", "resume"], self.said)
+        run_async(["ohm", "pause"] if on else ["ohm", "resume"], self.said)
 
     def pause_for(self, length):
         if length:
-            run_async(["moe-local", "pause", "--for", length], self.said)
+            run_async(["ohm", "pause", "--for", length], self.said)
 
     def resume(self):
-        run_async(["moe-local", "resume"], self.said)
+        run_async(["ohm", "resume"], self.said)
 
     def said(self, code, out, err):
         if code != 0:
@@ -269,15 +268,15 @@ class OhmControlPage(OhmPage):
     def on_lock(self, on):
         if self.syncing:
             return
-        run_async(["moe-local", "lock", str(self.lock_step.get_selected() + 1)] if on else ["moe-local", "lock", "off"], self.said)
+        run_async(["ohm", "lock", str(self.lock_step.get_selected() + 1)] if on else ["ohm", "lock", "off"], self.said)
 
     def on_lock_step(self, _label):
         if not self.syncing and self.lock.get_active():
-            run_async(["moe-local", "lock", str(self.lock_step.get_selected() + 1)], self.said)
+            run_async(["ohm", "lock", str(self.lock_step.get_selected() + 1)], self.said)
 
     def on_login(self, on):
         if not self.syncing:
-            run_async(["moe-local", "autostart", "on" if on else "off"], self.said)
+            run_async(["ohm", "autostart", "on" if on else "off"], self.said)
 
     # ---- the game list
     def fill_games(self):
@@ -415,4 +414,4 @@ class OhmMemoryPage(OhmPage):
             self.fill_steps()
 
     def reset(self, done=None):
-        run_chain([["moe-local", "config", "unset", f"vram.{k}"] for k in self.d["defaults"]["vram"]], lambda f: (self.win.toast(f[0][:160] if f else "Memory settings restored"), self.rebuild(), done and done()))
+        run_chain([["ohm", "config", "unset", f"vram.{k}"] for k in self.d["defaults"]["vram"]], lambda f: (self.win.toast(f[0][:160] if f else "Memory settings restored"), self.rebuild(), done and done()))

@@ -1,7 +1,5 @@
 """Pages for tools that aren't installed are left out of the sidebar (a page that does nothing only confuses), and so is a section with nothing left."""
 
-import types
-
 import pytest
 
 from osettings import pages_ohm as po
@@ -55,11 +53,13 @@ def test_the_section_goes_when_nothing_in_it_is_installed(sandbox, open_page):
     assert "Tools" not in [n for n, _ in p.win.sections] and len(p.win.sections) == 4
 
 
-def test_the_command_on_the_path_is_enough_for_ohm(sandbox, open_page, monkeypatch):
+def test_another_program_called_ohm_on_the_path_does_not_count(sandbox, open_page, monkeypatch):
+    """`ohm` is a short generic name: only the launcher Qwen3.6-OHM's installer makes shows the pages."""
     po.OHM_BIN.unlink()
-    assert not po.OhmControlPage.available()
-    monkeypatch.setattr(po, "shutil", types.SimpleNamespace(which=lambda name: "/usr/bin/moe-local" if name == "moe-local" else None))
-    assert po.OhmControlPage.available() and po.OhmMemoryPage.available()
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ohm" if name == "ohm" else None)
+    assert not po.OhmControlPage.available() and not po.OhmMemoryPage.available()
+    po.OHM_BIN.write_text("")
+    assert po.OhmControlPage.available()
 
 
 def test_asking_for_a_hidden_page_opens_the_first_one(sandbox, open_page):

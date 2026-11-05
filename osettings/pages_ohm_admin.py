@@ -1,8 +1,8 @@
 """Qwen3.6-OHM, the rest: which model it runs, what it is told, how it is kept safe, and the dangerous controls.
 
-Same rule as pages_ohm.py: these pages are a front end for the `moe-local` command and decide nothing about validity.
-  moe-local models --json | use PATH [--drop-mmproj] | delete PATH --yes     moe-local lessons --json | accept N | reject N | clear
-  moe-local playbook --json | reset      moe-local cache clear      moe-local config reset --yes      moe-local hermes-unregister | uninstall-services
+Same rule as pages_ohm.py: these pages are a front end for the `ohm` command and decide nothing about validity.
+  ohm models --json | use PATH [--drop-mmproj] | delete PATH --yes     ohm lessons --json | accept N | reject N | clear
+  ohm playbook --json | reset      ohm cache clear      ohm config reset --yes      ohm hermes-unregister | uninstall-services
 Everything that can't easily be undone is on the Danger Zone page, apart from the ordinary settings, with a loud warning and a confirmation."""
 
 import json
@@ -54,7 +54,7 @@ class OhmModelPage(OhmPage):
         if not self.load():
             return
         try:
-            data = json.loads(run(["moe-local", "models", "--json"]))
+            data = json.loads(run(["ohm", "models", "--json"]))
         except ValueError:
             data = {}
         models = data.get("models") or []
@@ -87,7 +87,7 @@ class OhmModelPage(OhmPage):
         body = f"{m['name']} replaces the model in use. It loads in about half a minute, and Hermes is unavailable meanwhile."
         if self.has_projector:
             body += ("\n\nThe current setup loads a vision projector made for the current model. Another model can't use it, so image input is turned off with this switch.")
-        confirm(self.win, "Switch the model?", body, lambda: run_async(["moe-local", "models", "use", m["path"], *(["--drop-mmproj"] if self.has_projector else [])], said(self)),
+        confirm(self.win, "Switch the model?", body, lambda: run_async(["ohm", "models", "use", m["path"], *(["--drop-mmproj"] if self.has_projector else [])], said(self)),
                 label="Switch", destructive=False)
 
 
@@ -134,7 +134,7 @@ class OhmPromptPage(OhmPage):
         self.num(g, "verify.max_tokens", "Longest reply the check may write", "Tokens", 50)
         self.add(g)
         self.verdicts = Adw.ExpanderRow(title="What it has found lately")
-        out = run(["moe-local", "verify", "-n", "3"])
+        out = run(["ohm", "verify", "-n", "3"])
         label = Gtk.Label(label=out or "Nothing yet.", xalign=0, wrap=True, selectable=True, margin_top=8, margin_bottom=8, margin_start=12, margin_end=12)
         label.add_css_class("monospace")
         self.verdicts.add_row(label)
@@ -163,7 +163,7 @@ class OhmPromptPage(OhmPage):
     def fill_lessons(self):
         clear_group(self.lessons_group)
         try:
-            items = json.loads(run(["moe-local", "lessons", "--json"]))
+            items = json.loads(run(["ohm", "lessons", "--json"]))
         except ValueError:
             items = []
         new = [x for x in items if x.get("status") == "new"]
@@ -171,14 +171,14 @@ class OhmPromptPage(OhmPage):
             group_add(self.lessons_group, Adw.ActionRow(title="No suggestions waiting", subtitle=f"{len(items)} seen so far" if items else "The model hasn't needed one yet"))
         for x in new:
             row = Adw.ActionRow(title=x["text"], subtitle=f"seen {x.get('count', 1)} time(s), last {x.get('last', '')}", title_lines=0)
-            row.add_suffix(icon_button("object-select-symbolic", "Add to the playbook", lambda i=x["id"]: run_async(["moe-local", "lessons", "accept", str(i)], said(self)), css="suggested-action"))
-            row.add_suffix(icon_button("window-close-symbolic", "Not that one", lambda i=x["id"]: run_async(["moe-local", "lessons", "reject", str(i)], said(self))))
+            row.add_suffix(icon_button("object-select-symbolic", "Add to the playbook", lambda i=x["id"]: run_async(["ohm", "lessons", "accept", str(i)], said(self)), css="suggested-action"))
+            row.add_suffix(icon_button("window-close-symbolic", "Not that one", lambda i=x["id"]: run_async(["ohm", "lessons", "reject", str(i)], said(self))))
             group_add(self.lessons_group, row)
 
     # ---- the playbook
     def playbook_group(self):
         try:
-            self.pb = json.loads(run(["moe-local", "playbook", "--json"]))
+            self.pb = json.loads(run(["ohm", "playbook", "--json"]))
         except ValueError:
             self.pb = {"path": "", "custom": False, "text": "", "default": ""}
         g = Adw.PreferencesGroup(title="The playbook", description=("This is your own playbook." if self.pb["custom"] else "This is the built-in playbook. Saving here makes your own copy, "
@@ -194,7 +194,7 @@ class OhmPromptPage(OhmPage):
         if self.pb["custom"]:
             back = Adw.ButtonRow(title="Go back to the built-in playbook", start_icon_name="edit-undo-symbolic")
             back.connect("activated", lambda _r: confirm(self.win, "Use the built-in playbook?", "Your own playbook is deleted. The lines you accepted from lessons go with it.",
-                                                         lambda: run_async(["moe-local", "playbook", "reset"], said(self)), label="Use the built-in one"))
+                                                         lambda: run_async(["ohm", "playbook", "reset"], said(self)), label="Use the built-in one"))
             g.add(back)
         return g
 
@@ -322,8 +322,8 @@ class OhmDangerPage(OhmPage):
         self.add(g)
 
         g = Adw.PreferencesGroup(title="Delete things", description="Each of these asks you to confirm.")
-        for title, sub, cmd, label in (("Delete the saved conversations", "The model's memory of recent chats. The next messages are slower while it rebuilds them.", ["moe-local", "cache", "clear"], "Delete"),
-                                       ("Clear the lesson list", "The suggestions waiting to be added to the playbook. The playbook itself is kept.", ["moe-local", "lessons", "clear"], "Clear")):
+        for title, sub, cmd, label in (("Delete the saved conversations", "The model's memory of recent chats. The next messages are slower while it rebuilds them.", ["ohm", "cache", "clear"], "Delete"),
+                                       ("Clear the lesson list", "The suggestions waiting to be added to the playbook. The playbook itself is kept.", ["ohm", "lessons", "clear"], "Clear")):
             row = Adw.ActionRow(title=title, subtitle=sub)
             b = Gtk.Button(label=label, valign=Gtk.Align.CENTER, css_classes=["destructive-action"])
             b.connect("clicked", lambda _b, t=title, c=cmd, s=sub: confirm(self.win, t + "?", s, lambda: run_async(c, said(self)), label=label))
@@ -333,7 +333,7 @@ class OhmDangerPage(OhmPage):
 
         g = Adw.PreferencesGroup(title="Delete a model file", description="A downloaded model can be many gigabytes and has to be downloaded again. The model in use can't be deleted here.")
         try:
-            models = [m for m in json.loads(run(["moe-local", "models", "--json"])).get("models", []) if not m["current"]]
+            models = [m for m in json.loads(run(["ohm", "models", "--json"])).get("models", []) if not m["current"]]
         except ValueError:
             models = []
         self.victims = models
@@ -353,14 +353,14 @@ class OhmDangerPage(OhmPage):
         reset.add_css_class("destructive-action")
         reset.connect("activated", lambda _r: typed_confirm(self.win, "Reset every setting?",
                       "Memory limits, steps, games, protections, the model server's options (including the vision projector and which llama-server build is used) all go back to the "
-                      "built-in defaults, and some defaults may not suit this computer. The old file is kept next to it as config.toml.bak.", "RESET", lambda: run_async(["moe-local", "config", "reset", "--yes"], said(self)),
+                      "built-in defaults, and some defaults may not suit this computer. The old file is kept next to it as config.toml.bak.", "RESET", lambda: run_async(["ohm", "config", "reset", "--yes"], said(self)),
                       label="Reset everything"))
         g.add(reset)
         self.add(g)
 
         g = Adw.PreferencesGroup(title="Take it apart", description="After these the model is no longer started, or no longer known to Hermes. Your model files and settings stay.")
-        for title, sub, cmd, word in (("Remove it from Hermes", "Hermes forgets this model and goes back to the one it used before. Put it back with `moe-local hermes-register`.", ["moe-local", "hermes-unregister"], "REMOVE"),
-                                      ("Remove its background services", "It stops now and no longer starts at login. Put them back with `moe-local install-services`.", ["moe-local", "uninstall-services"], "UNINSTALL")):
+        for title, sub, cmd, word in (("Remove it from Hermes", "Hermes forgets this model and goes back to the one it used before. Put it back with `ohm hermes-register`.", ["ohm", "hermes-unregister"], "REMOVE"),
+                                      ("Remove its background services", "It stops now and no longer starts at login. Put them back with `ohm install-services`.", ["ohm", "uninstall-services"], "UNINSTALL")):
             row = Adw.ButtonRow(title=title, start_icon_name="edit-delete-symbolic")
             row.add_css_class("destructive-action")
             row.connect("activated", lambda _r, t=title, s=sub, c=cmd, w=word: typed_confirm(self.win, t + "?", s, w, lambda: run_async(c, said(self)), label=t))
@@ -394,4 +394,4 @@ class OhmDangerPage(OhmPage):
     def delete_model(self):
         m = self.victims[self.victim.get_selected()]
         typed_confirm(self.win, f"Delete {m['name']}?", f"{m['size_mib']} MiB are deleted for good. It has to be downloaded again to use it.", "DELETE",
-                      lambda: run_async(["moe-local", "models", "delete", m["path"], "--yes"], said(self)), label="Delete it for good")
+                      lambda: run_async(["ohm", "models", "delete", m["path"], "--yes"], said(self)), label="Delete it for good")
