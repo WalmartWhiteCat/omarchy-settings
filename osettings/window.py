@@ -8,6 +8,7 @@ from .pages_keys import AutostartPage, KeysPage, leave_capture
 from .pages_look import BackgroundPage, ColorsPage, RulesPage, ThemePage, WindowsPage, undo_all_color_edits
 from .pages_system import (AppsPage, BarPage, CursorPage, DisplaysPage, InputPage, NightLightPage, PowerPage,
                            TextPage)
+from .pages_ohm import OhmControlPage, OhmMemoryPage
 from .pages_widgets import NotebookPage, NotesPage
 from .store import Store
 
@@ -16,7 +17,7 @@ SECTIONS = [
     ("Display", [DisplaysPage, NightLightPage, TextPage, CursorPage]),
     ("Input", [InputPage, KeysPage]),
     ("System", [BarPage, PowerPage, AppsPage, AutostartPage]),
-    ("Tools", [NotesPage, NotebookPage]),
+    ("Tools", [NotesPage, NotebookPage, OhmControlPage, OhmMemoryPage]),
 ]
 # Theme near the end (slowest, and it picks a wallpaper), then that theme's first stock wallpaper.
 PAGES = {cls.key for _, classes in SECTIONS for cls in classes}

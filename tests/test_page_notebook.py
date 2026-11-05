@@ -144,7 +144,7 @@ def test_the_page_is_under_tools(sandbox, open_page):
     from osettings import window
 
     sections = dict((name, [c.key for c in classes]) for name, classes in window.SECTIONS)
-    assert sections["Tools"] == ["notes", "notebook"] and "Widgets" not in sections
+    assert sections["Tools"] == ["notes", "notebook", "ohm", "ohm-memory"] and "Widgets" not in sections
 
 
 def test_defaults_limits_and_choices_match_notebooks_own():
@@ -183,3 +183,15 @@ def test_a_pending_slider_write_happens_when_the_page_goes_away_not_later(sandbo
     seed(margin=500)                   # the file moved on; a timer that fires later must not undo it
     p.page.flush_pending()
     assert cfg() == {"margin": 500}
+
+
+def test_a_page_writes_only_what_it_changed(sandbox, open_page):
+    """Another edit to the file (by hand, or by a stale page) must survive this page's next change."""
+    seed(margin=300, vault="/mnt/Writing")
+    p = open_page("notebook")
+    seed(margin=500, vault="/mnt/Writing", line_spacing=9)      # edited elsewhere after the page was built
+    p.choose("Sort notes", "By name")
+    assert cfg() == {"margin": 500, "vault": "/mnt/Writing", "line_spacing": 9, "sort": "name"}
+    p.page.set("title_gap", 30)
+    p.page.flush_pending()
+    assert cfg() == {"margin": 500, "vault": "/mnt/Writing", "line_spacing": 9, "sort": "name", "title_gap": 30}

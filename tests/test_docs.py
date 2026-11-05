@@ -18,7 +18,7 @@ def table_rows():
     out = {}
     for r in rows:
         cells = [c.strip() for c in r.strip("|").split("|")]
-        key = re.search(r"\(`(\w+)`\)", cells[1]).group(1)
+        key = re.search(r"\(`([\w-]+)`\)", cells[1]).group(1)
         out[key] = cells
     return out
 

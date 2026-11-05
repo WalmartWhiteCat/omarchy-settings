@@ -245,11 +245,12 @@ def read_notebook_config():
     return {k: data[k] if k in data and nb_valid(k, data[k]) else d for k, d in NB_DEFAULTS.items()}
 
 
-def write_notebook_config(cfg, vault=None):
-    """Merges cfg into the file: defaults are left out, other keys kept; `vault`, when given, is the notes folder."""
+def write_notebook_config(cfg, vault=None, only=None):
+    """Merges cfg into the file: defaults are left out, other keys kept; `vault`, when given, is the notes folder. `only` limits it to those keys, so a page
+    writes just what it changed and can't undo an edit made elsewhere meanwhile (a stale page, or the file edited by hand)."""
     data = read_json(NOTEBOOK_CONFIG)
     data = data if isinstance(data, dict) else {}
-    for key, default in NB_DEFAULTS.items():
+    for key, default in NB_DEFAULTS.items() if only is None else {k: NB_DEFAULTS[k] for k in only if k in NB_DEFAULTS}.items():
         if cfg.get(key, default) == default or not nb_valid(key, cfg.get(key)):
             data.pop(key, None)
         else:
@@ -274,6 +275,7 @@ class NotebookPage(DebouncedWrites, Page):
         self.hook_unrealize()
         self.cfg = read_notebook_config()
         self._pending = None
+        self._dirty = set()
         if not NOTEBOOK_BIN.exists():
             self.add(Adw.PreferencesGroup(description="Notebook isn't installed (expected at "
                                           f"{NOTEBOOK_BIN}). These settings are saved and used once it is."))
@@ -361,17 +363,20 @@ class NotebookPage(DebouncedWrites, Page):
         """A slider or spinner step: written at most every 100 ms, so an open Notebook follows without a write per step.
         The spinner hands over floats (6.0); Notebook only accepts whole numbers for these, and would drop a 6.0."""
         self.cfg[key] = int(value) if isinstance(value, float) and value == int(value) else value
+        self._dirty.add(key)
         if not self._pending:
             self._pending = GLib.timeout_add(100, self.flush)
 
     def set_now(self, key, value):
         self.cfg[key] = value
+        self._dirty.add(key)
         self.flush()
 
     def flush(self):
         self._pending = None
+        keys, self._dirty = self._dirty, set()
         try:
-            write_notebook_config(self.cfg)
+            write_notebook_config(self.cfg, only=keys)
         except OSError as e:
             self.win.toast(f"Couldn't save the Notebook settings: {e}")
         return False
@@ -413,7 +418,7 @@ class NotebookPage(DebouncedWrites, Page):
 
     def set_folder(self, path):
         try:
-            write_notebook_config(self.cfg, vault=path)
+            write_notebook_config(self.cfg, vault=path, only=set())
         except OSError as e:
             self.win.toast(f"Couldn't save the Notebook settings: {e}")
             return
