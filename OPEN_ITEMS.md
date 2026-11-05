@@ -42,3 +42,4 @@ tests/test_nested_hyprland.py`) could settle some of these safely, for example w
 ## Before sharing it
 - Choose a license.
 - Screenshots for the README.
+- **Omarchy 4.5 settings the app doesn't show yet** (found 2026-11-05 reading the 4.5 notes; none is broken, they are just missing): `omarchy hyprland workspace layout default` (dwindle / scrolling / floating for workspaces without their own layout; it overrides the Windows page's Tiling layout once set), and the bar clock's format (`omarchy bar set omarchy.clock format ...`, 4.5 adds a live-seconds format).

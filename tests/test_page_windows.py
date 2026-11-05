@@ -77,6 +77,34 @@ def test_window_transparency_is_omarchys_own_setting(sandbox, open_page):
     assert "window transparency off" not in p.lua().lower()
 
 
+CORNERS = ("omarchy", "hyprland", "corners")
+
+
+def test_window_corners_are_omarchys_own_setting_and_explain_the_slider(sandbox, open_page):
+    """Omarchy 4.5's `corners` toggle files load after the app's file, so sharp/rounded there beats the rounding slider."""
+    sandbox.run_output[CORNERS] = "sharp\n"
+    p = open_page("windows")
+    assert shown(p.row("Window corners", Adw.ComboRow)) == "Sharp"
+    assert "Has no effect while Window corners is set to sharp" in p.row("Corner rounding").get_subtitle()
+    p.choose("Window corners", "Rounded")
+    assert sandbox.run_async[-1] == [*CORNERS, "rounded"]
+    p.choose("Window corners", "Follow the theme")
+    assert sandbox.run_async[-1] == [*CORNERS, "theme"]
+
+
+def test_window_corners_default_to_following_the_theme(sandbox, open_page):
+    p = open_page("windows")
+    assert shown(p.row("Window corners", Adw.ComboRow)) == "Follow the theme"
+    assert "Has no effect" not in (p.row("Corner rounding").get_subtitle() or "")
+
+
+def test_animations_switch_says_when_omarchys_toggle_overrides_it(sandbox, open_page):
+    from osettings import pages_look as pl
+    assert "overrides" not in (open_page("windows").row("Animations").get_subtitle() or "")
+    pl.NO_ANIMATIONS_FLAG.parent.mkdir(parents=True, exist_ok=True); pl.NO_ANIMATIONS_FLAG.write_text("")
+    assert "overrides" in open_page("windows").row("Animations").get_subtitle()
+
+
 def test_window_transparency_defaults_to_transparent(sandbox, open_page):
     assert shown(open_page("windows").row("Window transparency", Adw.ComboRow)) == "Transparent"
 

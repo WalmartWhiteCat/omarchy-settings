@@ -176,6 +176,7 @@ def sandbox(tmp_path, monkeypatch, request):
         "NOTEBOOK_BIN": home / ".local/bin/omarchy-notebook",
         "OHM_STATE": home / ".local/state/moe-local",
         "OHM_BIN": home / ".local/bin/ohm",
+        "NO_ANIMATIONS_FLAG": home / ".local/state/omarchy/toggles/hypr/no-animations.lua",
         "THUMB_DIR": home / ".cache/omarchy-settings/video-thumbs",
     }
     for mod in MODULES:

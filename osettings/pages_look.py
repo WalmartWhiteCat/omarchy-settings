@@ -695,6 +695,9 @@ class BackgroundPage(Page):
 
 WINDOW_PREFIXES = ("general:", "decoration:", "dwindle:", "master:", "scrolling:")
 WINDOW_TRANSPARENCY = ["omarchy", "hyprland", "window", "transparency"]
+WINDOW_CORNERS = ["omarchy", "hyprland", "corners"]
+CORNER_MODES = [("Follow the theme", "theme"), ("Sharp", "sharp"), ("Rounded", "rounded")]
+NO_ANIMATIONS_FLAG = HOME / ".local" / "state" / "omarchy" / "toggles" / "hypr" / "no-animations.lua"
 TRANSPARENCY_MODES = [("Opaque", "opaque"), ("Transparent", "transparent"), ("Glassy", "glassy")]
 
 
@@ -715,6 +718,15 @@ class WindowsPage(Page):
                 store.schedule_save(after=self.rebuild)
 
         run_async([*WINDOW_TRANSPARENCY, mode], done)
+
+    def set_corners(self, mode):
+        def done(code, out, err):
+            if code != 0:
+                self.win.toast((err or out).strip()[:120] or "Couldn't change window corners")
+            else:
+                self.rebuild()
+
+        run_async([*WINDOW_CORNERS, mode], done)
 
     def build(self):
         h = self.win.store
@@ -746,7 +758,16 @@ class WindowsPage(Page):
                                  description="Border colors normally come from the theme.")
         g.add(scale_row("Border width", None, 0, 10, 1, cur("general:border_size", 2), 0,
                         setter("general:border_size")))
-        g.add(scale_row("Corner rounding", "Omarchy's menus, notifications and panels use the same rounding",
+        # Omarchy 4.5's own Window corners setting (`omarchy hyprland corners`) loads after this app's file, so
+        # "sharp" or "rounded" there beats the slider below; the slider is the theme's corners adjusted.
+        corners = run(WINDOW_CORNERS).strip()
+        modes = [v for _, v in CORNER_MODES]
+        corners = corners if corners in modes else "theme"
+        g.add(combo_row("Window corners", "Omarchy's own setting: follow the theme, or force sharp or rounded corners",
+                        [l for l, _ in CORNER_MODES], corners, self.set_corners, modes))
+        g.add(scale_row("Corner rounding",
+                        ("Omarchy's menus, notifications and panels use the same rounding" if corners == "theme" else
+                         f"Has no effect while Window corners is set to {corners}"),
                         0, 30, 1, cur("decoration:rounding", 0), 0,
                         setter("decoration:rounding")))
         self.border_rows(g)
@@ -894,8 +915,10 @@ class WindowsPage(Page):
     def animation_group(self):
         h = self.win.store
         g = Adw.PreferencesGroup(title="Animations")
-        g.add(switch_row("Animations", None, h.current("animations:enabled", True),
-                         lambda v: h.set("animations:enabled", v)))
+        g.add(switch_row("Animations",
+                         ("Omarchy's animations toggle is off (it also turns off blur and shadows), which overrides "
+                          "this page: switch it on in Omarchy's Toggle menu" if NO_ANIMATIONS_FLAG.exists() else None),
+                         h.current("animations:enabled", True), lambda v: h.set("animations:enabled", v)))
 
         def set_anim(key, value):
             if value is None:
