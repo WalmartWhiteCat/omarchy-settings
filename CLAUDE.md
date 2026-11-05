@@ -49,6 +49,15 @@ missing package). After an Omarchy update or reinstall, check the assumptions th
 Omarchy's commands and files (the Pages table, "Design decisions") against the new
 `/usr/share/omarchy` before trusting them; the tests use stand-ins and won't notice.
 
+Last checked that way against Omarchy 4.5.0 (Hyprland 0.56): every `omarchy` command and shell IPC
+function the app calls still exists, and the generated Lua loads with no `configerrors`. That check
+found three real changes, since fixed (Bar background and sections, Windows transparency, video
+backgrounds). Compared and found unchanged: the idle settings in shell.json, the `omarchy toggle`
+commands and their status output, `omarchy default`, `omarchy plugin list --json`, the theme-set
+hook folder, and Omarchy's binding files (the Keybindings parser reads all of them, including 4.5's
+input-method, dictation and JIS files). Not checked live: the pages' real effect on the desktop
+(OPEN_ITEMS.md).
+
 ## Layout
 - `omarchy-settings.py`: entry point. `osettings/__init__.py` pins the GI versions.
 - `core.py`: paths, process helpers (`run`, `run_async`, `run_chain`, `spawn_detached`, `trash_file`),
