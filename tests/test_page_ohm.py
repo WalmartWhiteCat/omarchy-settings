@@ -235,6 +235,26 @@ def test_without_cgroup_information_only_the_name_filter_applies():
     assert po.launched_as_app("0::/user.slice/app-gtk\\x2dlaunch-ab12.scope (deleted)\n")
 
 
+def test_only_main_processes_are_offered_not_what_an_app_starts_inside_itself():
+    assert po.is_program("steam", APP) and po.is_program("firefox", APP, inside_app=False)
+    assert not po.is_program("steamwebhelper", APP, inside_app=True) and not po.is_program("reaper", APP, inside_app=True)
+    WINE = "/home/u/.local/share/Steam/compatibilitytools.d/Proton/files/lib/wine/i386-unix/wine64-preloader"
+    assert po.is_program("Client-Win64-Sh", APP, inside_app=True, exe=WINE)           # a Proton game sits inside Steam's tree but stays
+    for plumbing in ("explorer.exe", "services.exe", "winedevice.exe", "wineserver", "steam.exe"):
+        assert not po.is_program(plumbing, APP, inside_app=True, exe=WINE), plumbing
+    assert not po.is_program("steamwebhelper", APP, inside_app=True, exe="/usr/lib/steam/steamwebhelper")
+
+
+def test_a_wrapper_script_does_not_hide_the_app_it_starts(monkeypatch):
+    tree = {10: (1, "bash", "u"), 11: (10, "steam", "u"), 12: (11, "reaper", "u"), 13: (12, "game", "u"), 20: (1, "bash", "v"), 21: (20, "firefox", "w")}
+    monkeypatch.setattr(po, "parent_pid", lambda pid: tree.get(pid, (0,))[0])
+    monkeypatch.setattr(po, "read_proc", lambda pid, leaf: f"0::/x/{tree[pid][2]}\n" if leaf == "cgroup" else tree[pid][1] + "\n")
+    assert not po.has_app_ancestor(11, "u")           # only bash above steam
+    assert po.has_app_ancestor(12, "u") and po.has_app_ancestor(13, "u")
+    assert not po.has_app_ancestor(21, "w")           # parent bash lives in another unit
+    assert not po.has_app_ancestor(11, "")
+
+
 def test_the_picker_hides_this_machines_background_services():
     names = po.running_programs()
     assert not {"pipewire", "pipewire-pulse", "wireplumber", "bt-agent", "dbus-broker", "systemd"} & set(names)

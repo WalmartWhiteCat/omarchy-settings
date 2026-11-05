@@ -62,22 +62,75 @@ NOT_PROGRAMS = {"bash", "sh", "dash", "zsh", "fish", "python", "python3", "sleep
 NOT_PROGRAM_PREFIXES = ("omarchy-", "xdg-", "gvfs", "dbus", "at-spi", "p11-kit", "gnome-keyring", "systemd", "(sd-")
 
 
+def cgroup_unit(cgroup_text):
+    """The last path part of a cgroup listing (the unit the process lives in), or "" when unknown."""
+    return cgroup_text.strip().splitlines()[-1].rsplit("/", 1)[-1].removesuffix(" (deleted)") if cgroup_text.strip() else ""
+
+
 def launched_as_app(cgroup_text):
     """Was this started as an application (by the launcher, Steam or a terminal) rather than as a background service or part of the session?
     systemd puts apps in `app-*.scope` units and daemons (pipewire, bluetooth agents, portals) in `*.service`. Unknown (no cgroup info) counts as yes."""
-    unit = cgroup_text.strip().splitlines()[-1].rsplit("/", 1)[-1].removesuffix(" (deleted)") if cgroup_text.strip() else ""
+    unit = cgroup_unit(cgroup_text)
     return not unit or (unit.startswith("app-") and (unit.endswith(".scope") or ".service" in unit))
 
 
-def is_program(name, cgroup_text):
-    """True for something a person might start or stop on purpose: not a system daemon, shell or helper."""
+# Windows plumbing every Wine/Proton prefix starts next to the game: never what you would list.
+WINE_PLUMBING = {"csrss.exe", "explorer.exe", "lsass.exe", "plugplay.exe", "rpcss.exe", "services.exe", "steam.exe", "svchost.exe", "tabtip.exe",
+                 "winedevice.exe", "wineserver", "conhost.exe", "start.exe", "wineboot.exe", "winedbg.exe", "crashhandler.exe", "cmd.exe", "wine", "wine64"}
+
+
+def is_wine_game(name, exe):
+    """A program running under Wine/Proton (its executable is the wine preloader) that is not Windows plumbing: Steam runs games this way,
+    inside Steam's own process tree, so "top of the app" alone would hide every one of them."""
+    return exe.rsplit("/", 1)[-1].endswith("-preloader") and name.lower() not in WINE_PLUMBING
+
+
+def named_like_program(name):
     low = name.lower()
-    return bool(name) and low not in NOT_PROGRAMS and not low.startswith(NOT_PROGRAM_PREFIXES) and not low.endswith("-daemon") and launched_as_app(cgroup_text)
+    return bool(name) and low not in NOT_PROGRAMS and not low.startswith(NOT_PROGRAM_PREFIXES) and not low.endswith("-daemon")
+
+
+def is_program(name, cgroup_text, inside_app=False, exe=""):
+    """True for something a person might start or stop on purpose: not a system daemon, shell or helper, and a main process: the first
+    real program of its app, not one an app started inside itself (`inside_app`: a real program is among its ancestors in the same unit).
+    A game running under Wine/Proton is kept even then."""
+    return named_like_program(name) and launched_as_app(cgroup_text) and (not inside_app or is_wine_game(name, exe))
+
+
+def read_proc(pid, leaf):
+    try:
+        return open(f"/proc/{pid}/{leaf}").read()
+    except OSError:
+        return None
+
+
+def parent_pid(pid):
+    """Parent of a process from /proc/PID/stat (the name in it may hold spaces and brackets, so split after the last one)."""
+    stat = read_proc(pid, "stat")
+    try:
+        return int(stat.rsplit(")", 1)[1].split()[1]) if stat else 0
+    except (IndexError, ValueError):
+        return 0
+
+
+def has_app_ancestor(pid, unit):
+    """Is a real program (not a shell or helper) among this process's ancestors in the same cgroup unit? Wrapper scripts do not count:
+    steam started by a bash launcher is still the main process of its app. Unknown unit = no."""
+    if not unit:
+        return False
+    for _ in range(64):
+        pid = parent_pid(pid)
+        if pid <= 1 or cgroup_unit(read_proc(pid, "cgroup") or "") != unit:
+            return False
+        if named_like_program((read_proc(pid, "comm") or "").strip()):
+            return True
+    return False
 
 
 def running_programs():
-    """Names of the programs this user has started, the way the controller matches games (the first 15 characters of the process name).
-    Background services and session plumbing (pipewire, bt-agent, portals, dbus...) are left out; a name can still be typed in by hand."""
+    """Names of the main programs this user has started, the way the controller matches games (the first 15 characters of the process name).
+    Background services, session plumbing and the helper processes an app starts inside itself are left out (a game under Wine/Proton still
+    counts); a name can still be typed in by hand."""
     names = set()
     for d in os.listdir("/proc"):
         if d.isdigit():
@@ -85,11 +138,14 @@ def running_programs():
                 if os.stat(f"/proc/{d}").st_uid != os.getuid():
                     continue
                 name = open(f"/proc/{d}/comm").read().strip()
+                cg = read_proc(d, "cgroup") or ""
+                if not (named_like_program(name) and launched_as_app(cg)):
+                    continue
                 try:
-                    cg = open(f"/proc/{d}/cgroup").read()
+                    exe = os.readlink(f"/proc/{d}/exe")
                 except OSError:
-                    cg = ""
-                if is_program(name, cg):
+                    exe = ""
+                if is_program(name, cg, has_app_ancestor(int(d), cgroup_unit(cg)), exe):
                     names.add(name)
             except OSError:
                 pass
