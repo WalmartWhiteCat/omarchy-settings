@@ -60,14 +60,36 @@ def test_a_latin_layout_goes_first(open_page, monkeypatch):
 def test_caps_lock_and_switch_options_keep_others(open_page, monkeypatch):
     setup(monkeypatch)
     p = open_page("input", {"hyprland": {"input:kb_options": "caps:escape,grp:alt_shift_toggle,compose:ralt"}})
-    assert p.row("Caps Lock key acts as").get_selected() == 2  # Escape
+    assert p.row("Caps Lock key acts as").get_selected() == 4  # Escape
     assert p.row("Switch layouts with").get_selected() == 1  # Alt + Shift
     p.choose("Caps Lock key acts as", "Control")
     assert p.store.values["input:kb_options"] == "ctrl:nocaps,grp:alt_shift_toggle,compose:ralt"
     p.choose("Switch layouts with", "No shortcut")
     assert p.store.values["input:kb_options"] == "ctrl:nocaps,compose:ralt"
-    p.choose("Caps Lock key acts as", "Compose key (Omarchy default)")
+    p.choose("Caps Lock key acts as", "Compose key, Shift + Caps Lock cancels (Omarchy before 4.5)")
     assert p.store.values["input:kb_options"] == "compose:caps,shift:both_capslock_cancel,compose:ralt"
+
+
+def shown_caps(p):
+    c = p.row("Caps Lock key acts as"); return c.get_model().get_string(c.get_selected())
+
+
+def test_caps_lock_shows_omarchy_4_5_default_and_the_older_choices(open_page, monkeypatch):
+    """Omarchy 4.5's default is `omarchy:shift_caps_compose` (Caps Lock stays Caps Lock, Shift + Caps Lock composes);
+    the pre-4.5 default and a bare `compose:caps` are shown as what they are, not as plain Caps Lock."""
+    setup(monkeypatch)
+    for opts, label in (("omarchy:shift_caps_compose", "Caps Lock; Shift + Caps Lock composes (Omarchy default)"),
+                        ("", "Caps Lock only"),
+                        ("compose:caps,shift:both_capslock_cancel", "Compose key, Shift + Caps Lock cancels (Omarchy before 4.5)"),
+                        ("compose:caps", "Compose key")):
+        assert shown_caps(open_page("input", {"hyprland": {"input:kb_options": opts}})) == label, opts
+
+
+def test_choosing_the_omarchy_default_keeps_other_options(open_page, monkeypatch):
+    setup(monkeypatch)
+    p = open_page("input", {"hyprland": {"input:kb_options": "caps:escape,grp:alt_shift_toggle"}})
+    p.choose("Caps Lock key acts as", "Caps Lock; Shift + Caps Lock composes (Omarchy default)")
+    assert p.store.values["input:kb_options"] == "omarchy:shift_caps_compose,grp:alt_shift_toggle"
 
 
 def test_typing_and_mouse(open_page, monkeypatch):

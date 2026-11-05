@@ -526,8 +526,12 @@ def latin_first(layouts, variants):
 
 
 CAPS_OPTIONS = [
-    ("Compose key (Omarchy default)", "compose:caps,shift:both_capslock_cancel"),
-    ("Caps Lock", ""),
+    # Omarchy 4.5's default: Caps Lock is Caps Lock and Shift + Caps Lock composes (an option Omarchy defines in /etc/xkb).
+    ("Caps Lock; Shift + Caps Lock composes (Omarchy default)", "omarchy:shift_caps_compose"),
+    ("Caps Lock only", ""),
+    # Omarchy's default before 4.5 (the first of these two is matched before the second, so both options show as one choice).
+    ("Compose key, Shift + Caps Lock cancels (Omarchy before 4.5)", "compose:caps,shift:both_capslock_cancel"),
+    ("Compose key", "compose:caps"),
     ("Escape", "caps:escape"),
     ("Swap with Escape", "caps:swapescape"),
     ("Control", "ctrl:nocaps"),
