@@ -16,6 +16,7 @@ Covered by tests with stand-ins, but never clicked through live:
 - **Bar:** removing the Omarchy menu widget from the layout (assumes the bar shows only what's in
   its layout; if Omarchy re-adds enabled widgets, it would come back, harmlessly).
 - **Keyboard:** a non-Latin layout keeping shortcuts working.
+- **Background videos (Omarchy 4.5):** a video in the grid, set live, and its thumbnail (the thumbnailer was run for real on a made-up video, but the grid and `omarchy theme bg set` on a video never were).
 - **Background:** Automatic change's switch and interval against the real timer.
 - **Restore all defaults** end to end.
 - **Desktop Notes:** the page's sliders and position moving the widget live. (The widget's settings

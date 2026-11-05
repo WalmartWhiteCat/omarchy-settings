@@ -1,5 +1,6 @@
 """Shared paths, helpers and widgets for Omarchy Settings."""
 
+import hashlib
 import json
 import os
 import re
@@ -26,6 +27,10 @@ HYPR_DIR = HOME / ".config/hypr"
 SHELL_JSON = HOME / ".config/omarchy/shell.json"
 USER_THEMES = HOME / ".config/omarchy/themes"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+# Omarchy 4.5 also takes these as a (moving) background; `omarchy-theme-bg-next` lists the same ones.
+VIDEO_EXTS = {".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi"}
+# Still frames of videos, for the Background page's thumbnails (the grid can't decode a video).
+THUMB_DIR = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "omarchy-settings/video-thumbs"
 
 # Omarchy's out-of-the-box values, used by the "Restore defaults" buttons.
 DEFAULT_THEME = "Tokyo Night"
@@ -225,12 +230,52 @@ def images_in(*dirs):
     return out
 
 
+def media_in(*dirs):
+    """Images and videos (what Omarchy can use as a background), numbers ordered by value."""
+    out = []
+    for d in dirs:
+        if d.is_dir():
+            out += sorted((p for p in d.iterdir() if p.suffix.lower() in IMAGE_EXTS | VIDEO_EXTS and p.is_file()),
+                          key=lambda p: natural_key(p.name))
+    return out
+
+
+def is_video(path):
+    return Path(path).suffix.lower() in VIDEO_EXTS
+
+
+def video_still(path, size):
+    """A PNG still of a video (its longest side `size`), made by ffmpegthumbnailer, the tool Omarchy's
+    own pickers use, and kept in THUMB_DIR keyed on the file's path, size and time so an edited video
+    gets a new one. None when it can't be made (not installed, a broken file, too slow)."""
+    try:
+        st = os.stat(path)
+        key = hashlib.sha1(f"{os.path.realpath(path)}|{st.st_size}|{st.st_mtime_ns}|{size}".encode()).hexdigest()
+        still = THUMB_DIR / f"{key}.png"
+        if still.is_file():
+            return still
+        THUMB_DIR.mkdir(parents=True, exist_ok=True)
+        partial = THUMB_DIR / f"{key}.part.png"
+        try:
+            subprocess.run(["ffmpegthumbnailer", "-i", str(path), "-o", str(partial), "-s", str(size), "-q", "8"],
+                           capture_output=True, timeout=12, check=True)
+            if partial.stat().st_size == 0:
+                return None
+            os.replace(partial, still)
+        finally:
+            partial.unlink(missing_ok=True)
+        return still
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
 def load_texture_async(path, width, height, callback):
-    """Decode a scaled thumbnail off the main thread."""
+    """Decode a scaled thumbnail off the main thread (a video's comes from a still frame)."""
 
     def worker():
         try:
-            pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(path), width, height, True)
+            source = video_still(path, max(width, height)) if is_video(path) else path
+            pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(source), width, height, True)
             fmt = Gdk.MemoryFormat.R8G8B8A8 if pb.get_has_alpha() else Gdk.MemoryFormat.R8G8B8
             tex = Gdk.MemoryTexture.new(pb.get_width(), pb.get_height(), fmt,
                                         GLib.Bytes.new(pb.get_pixels()), pb.get_rowstride())

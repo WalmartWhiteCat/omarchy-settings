@@ -236,3 +236,57 @@ def test_no_current_theme_is_an_empty_name():
     (core.STATE / "current").mkdir(parents=True)
     (core.STATE / "current/theme.name").write_text("nord\n")
     assert core.current_theme_slug() == "nord"
+
+
+def test_media_includes_the_videos_omarchy_accepts(tmp_path):
+    """`omarchy theme bg` (4.5) takes videos as backgrounds too; images_in stays images only, since
+    theme previews decode what it returns."""
+    for name in ("b.MP4", "a.png", "c.webm", "d.mkv", "e.mov", "f.m4v", "g.avi", "notes.txt", "h.svg"):
+        (tmp_path / name).write_text("x")
+    (tmp_path / "dir.mp4").mkdir()
+    assert [p.name for p in core.media_in(tmp_path, tmp_path / "missing")] == [
+        "a.png", "b.MP4", "c.webm", "d.mkv", "e.mov", "f.m4v", "g.avi"]
+    assert [p.name for p in core.images_in(tmp_path)] == ["a.png"]
+    assert core.is_video(tmp_path / "b.MP4") and not core.is_video(tmp_path / "a.png")
+
+
+class FakeThumbnailer:
+    """Stands in for subprocess.run inside core: writes the output file like ffmpegthumbnailer."""
+
+    def __init__(self, fail=None):
+        self.calls, self.fail = [], fail
+
+    def __call__(self, cmd, **kw):
+        self.calls.append((list(cmd), kw))
+        if self.fail:
+            raise self.fail
+        out = cmd[cmd.index("-o") + 1]
+        open(out, "wb").write(b"png")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+
+def test_a_videos_still_comes_from_ffmpegthumbnailer_and_is_cached(monkeypatch, tmp_path):
+    video = tmp_path / "waves.mp4"
+    video.write_bytes(b"v")
+    fake = FakeThumbnailer()
+    monkeypatch.setattr(core.subprocess, "run", fake)
+    still = core.video_still(video, 400)
+    assert still.read_bytes() == b"png" and still.parent == core.THUMB_DIR
+    cmd, kw = fake.calls[0]
+    assert cmd[:3] == ["ffmpegthumbnailer", "-i", str(video)] and cmd[cmd.index("-s") + 1] == "400"
+    assert kw["timeout"] <= 15  # a broken file can't hang the worker
+    assert core.video_still(video, 400) == still and len(fake.calls) == 1  # cached
+    video.write_bytes(b"a different, longer video")
+    assert core.video_still(video, 400) != still  # a changed file gets a new still
+
+
+def test_a_videos_still_failing_gives_none_and_leaves_no_file(monkeypatch, tmp_path):
+    video = tmp_path / "waves.mp4"
+    video.write_bytes(b"v")
+    for failure in (subprocess.TimeoutExpired("ffmpegthumbnailer", 10), FileNotFoundError("ffmpegthumbnailer"),
+                    subprocess.CalledProcessError(1, "ffmpegthumbnailer")):
+        monkeypatch.setattr(core.subprocess, "run", FakeThumbnailer(fail=failure))
+        assert core.video_still(video, 400) is None
+    assert not core.THUMB_DIR.exists() or not list(core.THUMB_DIR.iterdir())
+    monkeypatch.setattr(core.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
+    assert core.video_still(video, 400) is None  # exited fine but wrote nothing

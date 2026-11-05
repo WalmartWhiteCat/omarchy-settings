@@ -149,6 +149,7 @@ def sandbox(tmp_path, monkeypatch, request):
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     monkeypatch.setenv("XDG_STATE_HOME", str(home / ".local/state"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
     monkeypatch.delenv("HYPRLAND_INSTANCE_SIGNATURE", raising=False)
 
     paths = {
@@ -170,6 +171,7 @@ def sandbox(tmp_path, monkeypatch, request):
         "CYCLE_SERVICE": home / ".config/systemd/user/wallpaper-cycle.service",
         "NOTES_CONFIG": home / ".config/desktop-notes/config.json",
         "NOTES_PLUGIN": home / ".config/omarchy/plugins/sourced.desktop-notes",
+        "THUMB_DIR": home / ".cache/omarchy-settings/video-thumbs",
     }
     for mod in MODULES:
         for name, value in paths.items():
@@ -220,7 +222,8 @@ def sandbox(tmp_path, monkeypatch, request):
 
 REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
 WATCHED = [REAL_HOME / ".config/hypr", REAL_HOME / ".config/omarchy-settings", REAL_HOME / ".config/omarchy",
-           REAL_HOME / ".config/desktop-notes", REAL_HOME / ".config/systemd/user"]
+           REAL_HOME / ".config/desktop-notes", REAL_HOME / ".config/systemd/user",
+           REAL_HOME / ".cache/omarchy-settings"]
 
 
 def _snapshot():

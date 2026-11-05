@@ -9,7 +9,8 @@ from pathlib import Path
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .core import (DEFAULT_THEME, HOME, OMARCHY_PATH, STATE, USER_THEMES, Page, clear_group, combo_row, confirm,
-                   current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in, load_texture_async,
+                   current_theme_slug, group_add, gsetting, hypr_json, icon_button, images_in, is_video, load_texture_async,
+                   media_in,
                    reset_group, rgba_from_hypr, rgba_to_hex, rgba_to_hypr, run, run_async, run_chain, scale_row,
                    search_combo, slugify, switch_row, theme_dir, theme_preview, trash_file, write_atomic)
 from .store import DEFAULT_ANIMATIONS
@@ -410,7 +411,7 @@ class BackgroundPage(Page):
         buttons = Gtk.Box(spacing=6)
         self.bulk = icon_button("selection-mode-symbolic", "Move several to the Trash…", self.choose_remove)
         buttons.append(self.bulk)
-        buttons.append(icon_button("list-add-symbolic", "Add images…", self.on_add))
+        buttons.append(icon_button("list-add-symbolic", "Add images or videos…", self.on_add))
         self.group.set_header_suffix(buttons)
         self.flow = flowbox()
         self.flow.connect("child-activated", self.on_activate)
@@ -503,10 +504,15 @@ class BackgroundPage(Page):
         link = STATE / "current/background"
         current = os.path.realpath(link) if link.exists() else ""
         mine = self.user_dir()
-        self.bulk.set_visible(bool(images_in(mine)))
-        for img in images_in(mine, STATE / "current/theme/backgrounds"):
+        self.bulk.set_visible(bool(media_in(mine)))
+        for img in media_in(mine, STATE / "current/theme/backgrounds"):
             pic = thumb()
             overlay = Gtk.Overlay(child=pic)
+            if is_video(img):
+                badge = Gtk.Image(icon_name="media-playback-start-symbolic", halign=Gtk.Align.START,
+                                  valign=Gtk.Align.END, margin_start=8, margin_bottom=8, pixel_size=20)
+                badge.add_css_class("osd")
+                overlay.add_overlay(badge)
             # Only backgrounds the user added can go: the theme's own come back with the theme.
             if img.parent == mine:
                 btn = Gtk.Button(icon_name="user-trash-symbolic", tooltip_text="Move to Trash",
@@ -529,7 +535,7 @@ class BackgroundPage(Page):
 
     def choose_remove(self):
         """Pick several of the user's own backgrounds and move them to the Trash in one go."""
-        mine = images_in(self.user_dir())
+        mine = media_in(self.user_dir())
         if not mine:
             return
         dialog = Adw.AlertDialog(heading="Move backgrounds to the Trash?",
@@ -617,7 +623,7 @@ class BackgroundPage(Page):
         if current and any(os.path.realpath(i) == current for i in moved):
             # Don't leave the desktop pointing at a file that's gone.
             what = "Moved to the Trash" if len(moved) == 1 else f"Moved {len(moved)} backgrounds to the Trash"
-            remaining = images_in(self.user_dir(), STATE / "current/theme/backgrounds")
+            remaining = media_in(self.user_dir(), STATE / "current/theme/backgrounds")
             if remaining:
                 run_async(["omarchy", "theme", "bg", "set", str(remaining[0])], lambda *_: self.populate())
                 self.win.toast(f"{what}; switched to {remaining[0].name}")
@@ -633,8 +639,9 @@ class BackgroundPage(Page):
 
     def on_add(self):
         dialog = Gtk.FileDialog(title="Add backgrounds")
-        f = Gtk.FileFilter(name="Images")
+        f = Gtk.FileFilter(name="Images and videos")
         f.add_mime_type("image/*")
+        f.add_mime_type("video/*")
         filters = Gio.ListStore.new(Gtk.FileFilter)
         filters.append(f)
         dialog.set_filters(filters)
@@ -670,7 +677,7 @@ class BackgroundPage(Page):
             run_async(["omarchy", "theme", "bg", "set", str(last)], lambda *_: self.populate())
 
     def reset(self, done=None):
-        stock = images_in(STATE / "current/theme/backgrounds")
+        stock = media_in(STATE / "current/theme/backgrounds")
         if not stock:
             self.win.toast("This theme has no stock backgrounds")
             return done and done()

@@ -454,3 +454,44 @@ def test_cycle_timer_without_a_single_schedule_is_custom_and_cant_be_chosen_back
     p.choose(HOW_OFTEN, "Custom")
     assert selected(p) == "Every hour"
     assert "OnCalendar=*:00\n" in pl.CYCLE_TIMER.read_text()
+
+
+def test_videos_are_listed_marked_and_set_like_images(sandbox, open_page, monkeypatch):
+    """Omarchy 4.5 plays a video as the background; they were invisible here."""
+    user = theme(mine=("holiday.png",), current="2-stock.jpg")
+    (user / "waves.mp4").write_bytes(b"v")
+    (pl.STATE / "current/theme/backgrounds/loop.webm").write_bytes(b"v")
+    asked = []
+    monkeypatch.setattr(pl, "load_texture_async", lambda path, w, h, cb: asked.append(path.name))
+    p = open_page("background")
+    assert names(p) == ["holiday.png", "waves.mp4", "1-stock.png", "2-stock.jpg", "loop.webm"]
+    assert "waves.mp4" in asked and "loop.webm" in asked  # thumbnails are asked for like any other
+    badges = {c.path.name: any(isinstance(w, Gtk.Image) and w.get_icon_name() == "media-playback-start-symbolic"
+                               for w in widgets(c)) for c in tiles(p)}
+    assert badges == {"holiday.png": False, "waves.mp4": True, "1-stock.png": False, "2-stock.jpg": False,
+                      "loop.webm": True}
+    flow(p).emit("child-activated", tile(p, "waves.mp4"))
+    spin()
+    assert bg_sets(sandbox) == [str(user / "waves.mp4")]
+    # A video the user added can be moved to the Trash like an image.
+    assert any(isinstance(w, Gtk.Button) and w.get_tooltip_text() == "Move to Trash" for w in widgets(tile(p, "waves.mp4")))
+
+
+def test_added_videos_are_copied_and_set(sandbox, open_page, tmp_path):
+    user = theme()
+    (tmp_path / "waves.mp4").write_bytes(b"v")
+    p = open_page("background")
+    p.page.on_files(FilesChosen(Gio.File.new_for_path(str(tmp_path / "waves.mp4"))), None)
+    spin()
+    assert [f.name for f in user.iterdir()] == ["waves.mp4"]
+    assert bg_sets(sandbox) == [str(user / "waves.mp4")]
+
+
+def test_the_file_chooser_offers_videos_too(sandbox, open_page, monkeypatch):
+    theme()
+    opened = []
+    monkeypatch.setattr(pl.Gtk.FileDialog, "open_multiple", lambda self, *a: opened.append(self))
+    open_page("background").page.on_add()
+    f = opened[0].get_filters().get_item(0)
+    assert f.get_name() == "Images and videos"
+    assert "image/*" in str(f.to_gvariant()) and "video/*" in str(f.to_gvariant())
