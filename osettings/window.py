@@ -29,6 +29,9 @@ CSS = """
 .keycap { font-family: monospace; font-size: 0.9em; padding: 2px 8px; border-radius: 6px;
           background: alpha(currentColor, 0.08); border: 1px solid alpha(currentColor, 0.15); }
 .sidebar-heading { font-size: 0.8em; font-weight: bold; opacity: 0.6; margin: 12px 12px 4px; }
+banner.danger { background: @error_bg_color; color: white; font-weight: bold; }
+banner.danger label, banner.danger button { color: white; }
+banner.danger > revealer > widget { background: @error_bg_color; }
 """
 
 

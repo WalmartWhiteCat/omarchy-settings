@@ -300,6 +300,7 @@ class OhmDangerPage(OhmPage):
         if not self.load():
             return
         banner = Adw.Banner(title="DANGER ZONE: these can break the model, remove its protections, or delete things for good", revealed=True)
+        banner.add_css_class("danger")      # red, whatever the window's focus (a plain banner goes grey)
         g = Adw.PreferencesGroup()
         g.add(banner)
         self.add(g)
