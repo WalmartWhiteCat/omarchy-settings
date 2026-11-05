@@ -22,7 +22,7 @@ HYPRSUNSET_CONF = HYPR_DIR / "hyprsunset.conf"
 
 def shell_defaults():
     return read_json(OMARCHY_PATH / "config/omarchy/shell.json",
-                     {"idle": {"screensaver": 150, "lock": 300}, "bar": {"position": "top", "transparent": False}})
+                     {"idle": {"screensaver": 150, "lock": 300}, "bar": {"position": "top", "background": "opaque"}})
 
 
 def read_shell():
@@ -811,7 +811,22 @@ class CursorPage(Page):
 # ---------------------------------------------------------------- bar
 
 
-SECTIONS = ["left", "center", "right"]
+# Omarchy's bar sections, in the order they sit on the bar. centerBegin and centerEnd hang off the
+# two edges of the centre box and tray is the tray's drawer (all added in Omarchy 4.5).
+SECTIONS = ["left", "centerBegin", "center", "centerEnd", "tray", "right"]
+SECTION_TITLES = {"left": "Left", "centerBegin": "Center start", "center": "Center", "centerEnd": "Center end",
+                  "tray": "Tray", "right": "Right"}
+# What `omarchy bar background` takes, as the drop-down shows them. Omarchy calls see-through "none".
+BAR_BACKGROUNDS = [("Opaque", "opaque"), ("Transparent", "none"), ("Glassy", "glassy")]
+
+
+def bar_background(bar):
+    """The bar's background the way `omarchy bar background` reads it: shell.json's `background`,
+    else the flag Omarchy used before 4.5 (`transparent`: true is none, anything else opaque)."""
+    value = bar.get("background")
+    if value in [v for _, v in BAR_BACKGROUNDS]:
+        return value
+    return "none" if bar.get("transparent") is True else "opaque"
 
 
 class BarPage(Page):
@@ -825,8 +840,9 @@ class BarPage(Page):
         g = Adw.PreferencesGroup(title="Bar")
         g.add(combo_row("Position", None, [p.title() for p in self.POSITIONS], bar.get("position", "top"),
                         lambda v: self.cmd(["omarchy", "bar", "position", v]), self.POSITIONS))
-        g.add(switch_row("Transparent", None, bar.get("transparent", False),
-                         lambda v: self.cmd(["omarchy", "bar", "transparent", "true" if v else "false"])))
+        g.add(combo_row("Background", "Glassy blurs what is behind the bar", [l for l, _ in BAR_BACKGROUNDS],
+                        bar_background(bar), lambda v: self.cmd(["omarchy", "bar", "background", v]),
+                        [v for _, v in BAR_BACKGROUNDS]))
         vis = Adw.ButtonRow(title="Show / hide bar")
         vis.connect("activated", lambda _r: self.cmd(["omarchy", "toggle", "bar"]))
         g.add(vis)
@@ -855,12 +871,12 @@ class BarPage(Page):
 
         self.widgets = {}
         for sec in SECTIONS:
-            wg = Adw.PreferencesGroup(title=f"{sec.title()} widgets")
+            wg = Adw.PreferencesGroup(title=f"{SECTION_TITLES[sec]} widgets")
             self.widgets[sec] = wg
             self.add(wg)
         add = Adw.PreferencesGroup(title="Add a widget")
         self.add_row = Adw.ComboRow(title="Widget")
-        self.add_section = Adw.ComboRow(title="Section", model=Gtk.StringList.new([s.title() for s in SECTIONS]))
+        self.add_section = Adw.ComboRow(title="Section", model=Gtk.StringList.new([SECTION_TITLES[s] for s in SECTIONS]))
         btn = Adw.ButtonRow(title="Add to bar", start_icon_name="list-add-symbolic")
         btn.connect("activated", lambda _r: self.add_widget())
         add.add(self.add_row)
@@ -923,7 +939,7 @@ class BarPage(Page):
                 for target in SECTIONS:
                     if target == sec:
                         continue
-                    b = Gtk.Button(label=f"Move to {target}")
+                    b = Gtk.Button(label=f"Move to {SECTION_TITLES[target].lower()}")
                     b.add_css_class("flat")
                     b.connect("clicked", lambda _b, w=wid, t=target: self.move(w, t, None))
                     pop.append(b)
@@ -983,7 +999,7 @@ class BarPage(Page):
         d = shell_defaults().get("bar", {})
         clock = self.find_widget(shell_defaults(), "omarchy.clock") or {}
         cmds = [["omarchy", "bar", "position", d.get("position", "top")],
-                ["omarchy", "bar", "transparent", "true" if d.get("transparent") else "false"],
+                ["omarchy", "bar", "background", bar_background(d)],
                 # `omarchy toggle bar` drives a bar-off flag: "off" removes it, which shows the bar.
                 ["omarchy", "toggle", "bar", "off"]]
         for k in ("format", "formatAlt"):

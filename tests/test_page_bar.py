@@ -54,18 +54,23 @@ LAYOUT = {"left": ["omarchy.menu", {"id": "omarchy.clock", "format": "HH:mm", "f
 def bar(sandbox, monkeypatch):
     """A bar laid out as LAYOUT, Omarchy's plugin catalog, and Omarchy's default shell.json."""
     ps.SHELL_JSON.parent.mkdir(parents=True)
-    ps.SHELL_JSON.write_text(json.dumps({"bar": {"position": "bottom", "transparent": True, "layout": LAYOUT}}))
+    ps.SHELL_JSON.write_text(json.dumps({"bar": {"position": "bottom", "background": "none", "layout": LAYOUT}}))
     sandbox.run_output[("omarchy", "plugin", "list", "--json")] = json.dumps(CATALOG)
     (sandbox.omarchy / "config/omarchy").mkdir(parents=True)
     (sandbox.omarchy / "config/omarchy/shell.json").write_text(json.dumps({"bar": {
-        "position": "top", "transparent": False,
+        "position": "top", "background": "opaque",
         "layout": {"left": [{"id": "omarchy.clock", "format": "dddd HH:mm", "formatAlt": "d MMMM"}]}}}))
     return callbacks(monkeypatch, ps)
 
 
+def shown(combo):
+    return combo.get_model().get_string(combo.get_selected())
+
+
 def section_rows(p, section):
+    title = {"centerBegin": "Center start", "centerEnd": "Center end"}.get(section, section.title())
     group = next(g for g in widgets(p.page) if isinstance(g, Adw.PreferencesGroup)
-                 and g.get_title() == f"{section.title()} widgets")
+                 and g.get_title() == f"{title} widgets")
     return [r for r in widgets(group) if isinstance(r, Adw.ActionRow)]
 
 
@@ -75,11 +80,16 @@ def button(row, tooltip):
 
 def test_bar_settings(sandbox, open_page, bar):
     p = open_page("bar")
-    assert p.row("Position", Adw.ComboRow).get_selected() == 1 and p.row("Transparent").get_active()
+    assert p.row("Position", Adw.ComboRow).get_selected() == 1
+    assert shown(p.row("Background", Adw.ComboRow)) == "Transparent"
     p.choose("Position", "Left")
     assert sandbox.run_async[-1] == ["omarchy", "bar", "position", "left"]
-    p.switch("Transparent", False)
-    assert sandbox.run_async[-1] == ["omarchy", "bar", "transparent", "false"]
+    p.choose("Background", "Opaque")
+    assert sandbox.run_async[-1] == ["omarchy", "bar", "background", "opaque"]
+    p.choose("Background", "Glassy")
+    assert sandbox.run_async[-1] == ["omarchy", "bar", "background", "glassy"]
+    p.choose("Background", "Transparent")
+    assert sandbox.run_async[-1] == ["omarchy", "bar", "background", "none"]  # Omarchy calls it none
     p.press("Show / hide bar")
     assert sandbox.run_async[-1] == ["omarchy", "toggle", "bar"]
     bar["async"][-1][1](0, "Bar hidden\n", "")
@@ -112,7 +122,7 @@ def test_widgets_are_listed_by_section_and_move(sandbox, open_page, bar):
     menu_button = next(w for w in widgets(clock) if isinstance(w, Gtk.MenuButton))
     assert menu_button.get_tooltip_text() == "Move to section"
     assert [w.get_label() for w in widgets(menu_button.get_popover()) if isinstance(w, Gtk.Button)] == [
-        "Move to center", "Move to right"]  # not its own section
+        "Move to center start", "Move to center", "Move to center end", "Move to tray", "Move to right"]  # not its own section
     to_center = next(w for w in widgets(menu_button.get_popover())
                      if isinstance(w, Gtk.Button) and w.get_label() == "Move to center")
     to_center.emit("clicked")
@@ -176,7 +186,7 @@ def test_restore_bar_settings_keeps_the_widgets(sandbox, open_page, bar):
     p = open_page("bar")
     answer(p, "Restore defaults")
     cmds, done = bar["chain"][-1]
-    assert cmds == [["omarchy", "bar", "position", "top"], ["omarchy", "bar", "transparent", "false"],
+    assert cmds == [["omarchy", "bar", "position", "top"], ["omarchy", "bar", "background", "opaque"],
                     ["omarchy", "toggle", "bar", "off"],  # "off" removes the bar-off flag: the bar shows
                     ["omarchy", "bar", "set", "omarchy.clock", "format", "dddd HH:mm"],
                     ["omarchy", "bar", "set", "omarchy.clock", "formatAlt", "d MMMM"]]
@@ -193,3 +203,67 @@ def test_restore_default_bar_widgets(sandbox, open_page, bar):
     assert p.toasts[-1] == "Reset failed: omarchy bar defaults: failed"
     done([])
     assert p.toasts[-1] == "Bar widgets restored"
+
+
+def test_background_reads_the_old_transparent_flag(sandbox, open_page, bar):
+    """A shell.json from before Omarchy 4.5 says `transparent`; Omarchy reads that as none/opaque."""
+    ps.SHELL_JSON.write_text(json.dumps({"bar": {"transparent": True, "layout": LAYOUT}}))
+    assert shown(open_page("bar").row("Background", Adw.ComboRow)) == "Transparent"
+    ps.SHELL_JSON.write_text(json.dumps({"bar": {"layout": LAYOUT}}))
+    assert shown(open_page("bar").row("Background", Adw.ComboRow)) == "Opaque"
+
+
+def test_glassy_background_is_shown(sandbox, open_page, bar):
+    ps.SHELL_JSON.write_text(json.dumps({"bar": {"background": "glassy", "layout": LAYOUT}}))
+    assert shown(open_page("bar").row("Background", Adw.ComboRow)) == "Glassy"
+
+
+def test_restore_uses_the_old_default_flag_too(sandbox, open_page, bar):
+    """Omarchy's own default shell.json may still say `transparent` (before 4.5)."""
+    (sandbox.omarchy / "config/omarchy/shell.json").write_text(json.dumps({"bar": {"transparent": True}}))
+    p = open_page("bar")
+    answer(p, "Restore defaults")
+    assert ["omarchy", "bar", "background", "none"] in bar["chain"][-1][0]
+
+
+NEW_LAYOUT = {"left": ["omarchy.menu"], "centerBegin": ["me.weather"], "center": ["omarchy.clock"],
+              "centerEnd": ["omarchy.elsewhen"], "tray": ["omarchy.tray"], "right": ["omarchy.audio"]}
+
+
+def test_every_section_of_the_bar_is_listed(sandbox, open_page, bar):
+    """Omarchy 4.5 added centerBegin, centerEnd and the tray's drawer; widgets there were invisible here."""
+    ps.SHELL_JSON.write_text(json.dumps({"bar": {"layout": NEW_LAYOUT}}))
+    sandbox.run_output[("omarchy", "plugin", "list", "--json")] = json.dumps(CATALOG + [
+        {"id": "omarchy.elsewhen", "name": "World clock", "kinds": ["bar-widget"]}])
+    p = open_page("bar")
+    assert [r.get_title() for r in section_rows(p, "centerBegin")] == ["Weather"]
+    assert [r.get_title() for r in section_rows(p, "centerEnd")] == ["World clock"]
+    assert [r.get_title() for r in section_rows(p, "tray")] == ["Tray"]
+    # Moving within one of them uses Omarchy's own section name.
+    clock = section_rows(p, "centerEnd")[0]
+    menu_button = next(w for w in widgets(clock) if isinstance(w, Gtk.MenuButton))
+    labels_ = [w.get_label() for w in widgets(menu_button.get_popover()) if isinstance(w, Gtk.Button)]
+    assert labels_ == ["Move to left", "Move to center start", "Move to center", "Move to tray", "Move to right"]
+    next(w for w in widgets(menu_button.get_popover())
+         if isinstance(w, Gtk.Button) and w.get_label() == "Move to tray").emit("clicked")
+    spin()
+    assert bar["chain"][-1][0] == [["omarchy", "bar", "move", "omarchy.elsewhen", "--section", "tray"]]
+
+
+def test_adding_a_widget_to_a_new_section(sandbox, open_page, bar):
+    p = open_page("bar")
+    section = p.row("Section", Adw.ComboRow)
+    names = [section.get_model().get_string(i) for i in range(section.get_model().get_n_items())]
+    assert names == ["Left", "Center start", "Center", "Center end", "Tray", "Right"]
+    p.choose("Section", "Center end")
+    p.press("Add to bar")
+    assert bar["chain"][-1][0][1] == ["omarchy", "bar", "put", "me.weather", "--section", "centerEnd"]
+
+
+def test_removing_a_widget_from_a_new_section_only_takes_it_off_the_bar(sandbox, open_page, bar):
+    """The remove-from-layout path walked left/center/right only, so a menu in the tray stayed."""
+    ps.SHELL_JSON.write_text(json.dumps({"bar": {"layout": {**NEW_LAYOUT, "tray": ["omarchy.menu"]}}}))
+    p = open_page("bar")
+    button(section_rows(p, "tray")[0], "Remove from bar").emit("clicked")
+    spin()
+    assert json.loads(ps.SHELL_JSON.read_text())["bar"]["layout"]["tray"] == []
