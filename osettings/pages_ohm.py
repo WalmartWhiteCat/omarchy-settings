@@ -218,7 +218,7 @@ class OhmControlPage(OhmPage):
 
         g = Adw.PreferencesGroup(title="Keep it at one size", description="The model normally moves between its steps by itself. A lock holds it at one: it waits for room "
                                  "for exactly that size, and still unloads at once when something needs the memory.")
-        steps = self.cfg["vram"]["ramp_steps_mib"]
+        steps = self.d["steps"] if "steps" in self.d else self.cfg["vram"]["ramp_steps_mib"]      # the sizes in use (an older ohm only has the list)
         self.lock = switch_row("Lock at a step", None if steps else "Needs steps (see OHM Memory & Steps)", lock is not None, self.on_lock)
         self.lock.set_sensitive(bool(steps))
         g.add(self.lock)
@@ -401,9 +401,26 @@ class OhmMemoryPage(OhmPage):
 
         self.add(reset_group(self.win, "Restore the memory settings?", "Memory limits, steps and timings go back to the project's defaults. The rest of the settings are kept.", self.reset))
 
+    STEP_MODES = [("Pick each size", "list"), ("Spread evenly between a minimum and the maximum", "even")]
+
     def fill_steps(self):
         clear_group(self.steps_group)
-        steps = list(self.cfg["vram"]["ramp_steps_mib"])
+        v = self.cfg["vram"]
+        even = v.get("ramp_mode") == "even"
+        if "ramp_mode" in v:       # an older Qwen3.6-OHM has only the list
+            group_add(self.steps_group, combo_row("How the steps are set", None, [l for l, _ in self.STEP_MODES], v["ramp_mode"], self.on_step_mode, [m for _, m in self.STEP_MODES]))
+        if even:
+            lo, hi = self.limits("vram.ramp_min_mib")
+            group_add(self.steps_group, spin_row("Minimum", "MiB. The steps sit between this and the maximum (“Most memory the model may use”, above); neither end is a step",
+                                                 lo, hi, 100, v["ramp_min_mib"], lambda val: self.set("vram.ramp_min_mib", int(val))))
+            lo, hi = self.limits("vram.ramp_count")
+            group_add(self.steps_group, spin_row("Number of steps between", "Placed at equal distances from each other", lo, hi, 1, v["ramp_count"],
+                                                 lambda val: self.set("vram.ramp_count", int(val))))
+            self.steps_preview = Adw.ActionRow(title="The steps will be")
+            group_add(self.steps_group, self.steps_preview)
+            self.show_steps_preview()
+            return
+        steps = list(v["ramp_steps_mib"])
         use = switch_row("Use steps", "Off: one size from the free memory, and one regrowth (the older way)", bool(steps), self.on_use_steps)
         group_add(self.steps_group, use)
         for i, size in enumerate(steps):
@@ -414,6 +431,27 @@ class OhmMemoryPage(OhmPage):
             add = Adw.ButtonRow(title="Add a step", start_icon_name="list-add-symbolic")
             add.connect("activated", lambda _r: self.add_step())
             group_add(self.steps_group, add)
+
+    def show_steps_preview(self):
+        """The sizes the project works out (`ohm config --json` "steps"): this page never does the arithmetic itself, so it can't disagree with the controller."""
+        steps = self.d.get("steps") or []
+        row = getattr(self, "steps_preview", None)
+        if row is not None:
+            row.set_subtitle(" · ".join(str(x) for x in steps) + " MiB" if steps else "None: the minimum must be below the maximum")
+
+    def on_step_mode(self, mode):
+        if self.syncing or mode == self.cfg["vram"].get("ramp_mode"):
+            return
+        self.set_now("vram.ramp_mode", mode)
+        self.fill_steps()
+
+    def after_set(self, failures):
+        super().after_set(failures)
+        if not failures and self.cfg["vram"].get("ramp_mode") == "even":
+            fresh = ohm_describe()          # the sizes are worked out by the project; ask it again after every change
+            if fresh is not None:
+                self.d = fresh
+                self.show_steps_preview()
 
     def on_use_steps(self, on):
         if self.syncing:

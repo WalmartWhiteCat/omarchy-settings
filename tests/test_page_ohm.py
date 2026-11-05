@@ -13,15 +13,15 @@ pytestmark = needs_display
 
 VRAM = {"yield_low_mib": 1000, "headroom_mib": 2000, "cap_mib": 7500, "min_model_mib": 2700, "wake_margin_mib": 1500, "idle_tick_s": 2.0, "settle_window_s": 10, "settle_band_mib": 300,
         "settle_slope_mib": 150, "settle_timeout_s": 60, "peak_window_s": 30, "grow_room_mib": 1500, "grow_stable_s": 30, "cooldown_s": 90, "tick_s": 1.0, "ram_low_mib": 1500, "ram_ok_mib": 4000,
-        "start_timeout_s": 240, "ramp_steps_mib": [2700, 5100, 7500], "ramp_check_s": 30, "ramp_idle_s": 20, "ramp_hold_s": 300}
+        "start_timeout_s": 240, "ramp_steps_mib": [2700, 5100, 7500], "ramp_mode": "list", "ramp_min_mib": 2700, "ramp_count": 3, "ramp_check_s": 30, "ramp_idle_s": 20, "ramp_hold_s": 300}
 
 
-def describe(games=(), steps=None):
-    vram = dict(VRAM, **({"ramp_steps_mib": steps} if steps is not None else {}))
+def describe(games=(), steps=None, **vram_over):
+    vram = dict(VRAM, **({"ramp_steps_mib": steps} if steps is not None else {}), **vram_over)
     return {"file": "/x/config.toml", "exists": True, "config": {"vram": vram, "game_mode": {"processes": list(games)}}, "defaults": {"vram": dict(VRAM), "game_mode": {"processes": []}},
-            "warnings": [], "ranges": {"vram.cap_mib": [2000, 64000], "vram.yield_low_mib": [300, 8000], "vram.headroom_mib": [500, 8000], "vram.min_model_mib": [1000, 64000],
+            "warnings": [], "steps": list(steps) if steps is not None else [2700, 5100, 7500], "ranges": {"vram.ramp_min_mib": [0, 64000], "vram.ramp_count": [1, 20], "vram.cap_mib": [2000, 64000], "vram.yield_low_mib": [300, 8000], "vram.headroom_mib": [500, 8000], "vram.min_model_mib": [1000, 64000],
                                        "vram.wake_margin_mib": [200, 16000], "vram.ramp_check_s": [1, 3600], "vram.ramp_idle_s": [0, 3600], "vram.ramp_hold_s": [0, 86400], "vram.tick_s": [0.05, 10]},
-            "enums": {}, "restart_keys": ["model.path"], "no_live_keys": ["ports.router"]}
+            "enums": {"vram.ramp_mode": ["list", "even"]}, "restart_keys": ["model.path"], "no_live_keys": ["ports.router"]}
 
 
 @pytest.fixture
@@ -161,6 +161,13 @@ def test_without_steps_there_is_nothing_to_lock(sandbox, open_page):
     assert not p.row("Lock at a step").get_sensitive() and not p.row("Step", Adw.ComboRow).get_sensitive()
 
 
+def test_the_lock_offers_the_sizes_actually_in_use_when_steps_are_even(sandbox, open_page):
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(even_describe()); sandbox.run_output[("ohm", "autostart", "status")] = "x"
+    p = open_page("ohm")
+    assert p.row("Lock at a step").get_sensitive()
+    labels = p.row("Step", Adw.ComboRow).get_model(); assert [labels.get_string(i) for i in range(labels.get_n_items())] == ["Step 1: 2700 MiB", "Step 2: 5120 MiB", "Step 3: 7680 MiB"]
+
+
 def test_start_at_login(ohm, open_page, sandbox):
     p = open_page("ohm")
     assert p.row("Start with the computer").get_active()
@@ -294,6 +301,52 @@ def test_steps_can_be_turned_off_and_on(ohm, open_page, sandbox):
     assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_steps_mib", "[]"]] and not p.has_row("Step 1")
     p.switch("Use steps", True)
     assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_steps_mib", "[2700, 5100, 7500]"]] and p.has_row("Step 3")
+
+
+def even_describe(**over):
+    d = describe(ramp_mode="even", ramp_min_mib=0, ramp_count=3, cap_mib=10240, **over); d["steps"] = [2700, 5120, 7680]; return d
+
+
+def test_steps_can_be_spread_evenly_between_a_minimum_and_the_maximum(ohm, open_page, sandbox):
+    p = open_page("ohm-memory")
+    assert p.row("How the steps are set", Adw.ComboRow).get_selected() == 0 and p.has_row("Step 1") and not p.has_row("Minimum")
+    p.choose("How the steps are set", "Spread evenly between a minimum and the maximum")
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_mode", '"even"']]
+    assert p.has_row("Minimum") and p.has_row("Number of steps between") and p.has_row("The steps will be") and not p.has_row("Step 1") and not p.has_row("Use steps")
+
+
+def test_even_steps_show_what_the_project_works_out_and_write_minimum_and_count(sandbox, open_page):
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(even_describe())
+    sandbox.run_output[("ohm", "autostart", "status")] = "x"
+    p = open_page("ohm-memory")
+    assert p.row("Minimum", Adw.SpinRow).get_value() == 0 and p.row("Number of steps between", Adw.SpinRow).get_value() == 3
+    assert sub(p, "The steps will be") == "2700 · 5120 · 7680 MiB"
+    p.number("Minimum", 1000); p.number("Number of steps between", 4)
+    p.page.flush_pending()
+    assert sandbox.run_chain[-1] == [["ohm", "config", "set", "vram.ramp_min_mib", "1000"], ["ohm", "config", "set", "vram.ramp_count", "4"]]
+
+
+def test_the_preview_is_asked_for_again_after_a_change(sandbox, open_page, monkeypatch):
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(even_describe())
+    sandbox.run_output[("ohm", "autostart", "status")] = "x"
+    done = callbacks(monkeypatch, po)
+    p = open_page("ohm-memory")
+    after = dict(even_describe(), steps=[3000, 6000]); sandbox.run_output[("ohm", "config", "--json")] = json.dumps(after)
+    p.number("Number of steps between", 2); p.page.flush_pending(); done["chain"][-1][1]([])
+    assert sub(p, "The steps will be") == "3000 · 6000 MiB"
+
+
+def test_minimum_at_or_above_the_maximum_says_there_are_no_steps(sandbox, open_page):
+    d = even_describe(); d["steps"] = []
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(d); sandbox.run_output[("ohm", "autostart", "status")] = "x"
+    assert "None" in sub(open_page("ohm-memory"), "The steps will be")
+
+
+def test_an_older_ohm_without_even_steps_keeps_the_plain_list(sandbox, open_page):
+    d = describe(); [d["config"]["vram"].pop(k) for k in ("ramp_mode", "ramp_min_mib", "ramp_count")]
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(d); sandbox.run_output[("ohm", "autostart", "status")] = "x"
+    p = open_page("ohm-memory")
+    assert not p.has_row("How the steps are set") and p.has_row("Step 1") and p.has_row("Use steps")
 
 
 def test_restore_unsets_every_memory_setting(ohm, open_page, sandbox):
