@@ -282,7 +282,7 @@ class OhmControlPage(OhmPage):
             group_add(self.games, Adw.ActionRow(title="No games on the list", subtitle="The model only unloads when it needs the memory."))
         for n in names:
             row = Adw.ActionRow(title=n)
-            row.add_suffix(icon_button("list-remove-symbolic", "Take it off the list", lambda n=n: self.set_games([x for x in self.cfg["game_mode"]["processes"] if x != n])))
+            row.add_suffix(icon_button("user-trash-symbolic", "Take it off the list", lambda n=n: self.set_games([x for x in self.cfg["game_mode"]["processes"] if x != n])))
             group_add(self.games, row)
 
     def games_add_group(self):
@@ -377,7 +377,7 @@ class OhmMemoryPage(OhmPage):
         group_add(self.steps_group, use)
         for i, size in enumerate(steps):
             row = spin_row(f"Step {i + 1}", "MiB" + ("  (the smallest)" if i == 0 else ""), 1000, 64000, 100, size, lambda v, i=i: self.step_changed(i, int(v)))
-            row.add_suffix(icon_button("list-remove-symbolic", "Remove this step", lambda i=i: self.remove_step(i)))
+            row.add_suffix(icon_button("user-trash-symbolic", "Remove this step", lambda i=i: self.remove_step(i)))
             group_add(self.steps_group, row)
         if steps:
             add = Adw.ButtonRow(title="Add a step", start_icon_name="list-add-symbolic")
