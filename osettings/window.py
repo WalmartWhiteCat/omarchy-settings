@@ -51,7 +51,9 @@ class SettingsWindow(Adw.ApplicationWindow):
         sidebar = Gtk.ListBox(selection_mode=Gtk.SelectionMode.BROWSE)
         sidebar.add_css_class("navigation-sidebar")
         headings = {}
-        for section, classes in SECTIONS:
+        # Pages for tools that aren't installed are left out, and a section with nothing left goes too.
+        self.sections = [(name, shown) for name, classes in SECTIONS if (shown := [c for c in classes if c.available()])]
+        for section, classes in self.sections:
             for i, cls in enumerate(classes):
                 self.classes[cls.key] = cls
                 box = Gtk.Box(spacing=12, margin_top=6, margin_bottom=6, margin_start=6)
@@ -94,7 +96,7 @@ class SettingsWindow(Adw.ApplicationWindow):
         bp.add_setter(self.split, "collapsed", True)
         self.add_breakpoint(bp)
         self.connect("close-request", lambda *_: leave_capture(wait=True) or False)
-        self.select(page if page in self.classes else SECTIONS[0][1][0].key)
+        self.select(page if page in self.classes else self.sections[0][1][0].key)
         if self.store.load_warning:
             self.toast(self.store.load_warning)
         self.refresh_rebinds()

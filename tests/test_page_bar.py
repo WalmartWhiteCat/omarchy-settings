@@ -27,7 +27,7 @@ def labels(widget):
 
 def test_widget_names_are_shown_as_written(sandbox, open_page):
     """Rows use Pango markup: a name or id with & or < used to show as a blank or broken row."""
-    ps.SHELL_JSON.parent.mkdir(parents=True)
+    ps.SHELL_JSON.parent.mkdir(parents=True, exist_ok=True)
     ps.SHELL_JSON.write_text(json.dumps({"bar": {"layout": {"left": ["me.tips&tricks"], "center": [],
                                                             "right": []}}}))
     sandbox.run_output[("omarchy", "plugin", "list", "--json")] = json.dumps([
@@ -53,7 +53,7 @@ LAYOUT = {"left": ["omarchy.menu", {"id": "omarchy.clock", "format": "HH:mm", "f
 @pytest.fixture
 def bar(sandbox, monkeypatch):
     """A bar laid out as LAYOUT, Omarchy's plugin catalog, and Omarchy's default shell.json."""
-    ps.SHELL_JSON.parent.mkdir(parents=True)
+    ps.SHELL_JSON.parent.mkdir(parents=True, exist_ok=True)
     ps.SHELL_JSON.write_text(json.dumps({"bar": {"position": "bottom", "background": "none", "layout": LAYOUT}}))
     sandbox.run_output[("omarchy", "plugin", "list", "--json")] = json.dumps(CATALOG)
     (sandbox.omarchy / "config/omarchy").mkdir(parents=True)

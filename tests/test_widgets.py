@@ -275,17 +275,3 @@ def test_monitor_choices_skip_entries_without_a_name():
     assert pw.monitor_choices([{"model": "x"}, "DP-3", {"name": "", "model": "y"}], "") == [("Main monitor", "")]
     assert pw.monitor_choices([{"name": "DP-1"}], "") == [("Main monitor", ""), ("DP-1 (monitor)", "DP-1")]
     assert pw.monitor_choices([{"name": "DP-1", "description": "LG"}], "")[-1] == ("DP-1 (LG)", "DP-1")
-
-
-@needs_display
-def test_page_says_when_the_widget_isnt_installed(open_page):
-    from gi.repository import Adw
-    from .pagekit import widgets
-
-    def notices(p):
-        return [g.get_description() for g in widgets(p.page)
-                if isinstance(g, Adw.PreferencesGroup) and "isn't installed" in (g.get_description() or "")]
-
-    assert notices(open_page("notes"))  # the sandbox has no plugin folder
-    pw.NOTES_PLUGIN.mkdir(parents=True)
-    assert not notices(open_page("notes"))

@@ -129,17 +129,6 @@ def test_an_unwritable_file_says_so(sandbox, open_page, monkeypatch):
     assert any("Couldn't save the Notebook settings" in t for t in p.toasts)
 
 
-def test_not_installed_says_so_and_open_runs_it(sandbox, open_page):
-    p = open_page("notebook")
-    assert any("isn't installed" in (g.get_description() or "") for g in p.rows(Adw.PreferencesGroup))
-    pw.NOTEBOOK_BIN.parent.mkdir(parents=True, exist_ok=True)
-    pw.NOTEBOOK_BIN.write_text("")
-    p = open_page("notebook")
-    assert not any("isn't installed" in (g.get_description() or "") for g in p.rows(Adw.PreferencesGroup))
-    p.press("Open Notebook")
-    assert sandbox.spawn[-1] == ["omarchy-notebook"]
-
-
 def test_the_page_is_under_tools(sandbox, open_page):
     from osettings import window
 
@@ -195,3 +184,8 @@ def test_a_page_writes_only_what_it_changed(sandbox, open_page):
     p.page.set("title_gap", 30)
     p.page.flush_pending()
     assert cfg() == {"margin": 500, "vault": "/mnt/Writing", "line_spacing": 9, "sort": "name", "title_gap": 30}
+
+
+def test_open_notebook_runs_it(sandbox, open_page):
+    open_page("notebook").press("Open Notebook")
+    assert sandbox.spawn[-1] == ["omarchy-notebook"]

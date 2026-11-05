@@ -91,16 +91,14 @@ def margin_axes(position):
 class NotesPage(DebouncedWrites, Page):
     key, title, icon = "notes", "Desktop Notes", "accessories-text-editor-symbolic"
 
+    @classmethod
+    def available(cls):
+        return NOTES_PLUGIN.is_dir()      # the widget is a shell plugin folder; without it there is nothing to set
+
     def build(self):
         self.hook_unrealize()
         self.cfg = read_notes_config()
         self._pending = None
-        if not NOTES_PLUGIN.is_dir():
-            g = Adw.PreferencesGroup(description="The Desktop Notes widget isn't installed "
-                                                 f"(expected at {NOTES_PLUGIN}). These settings are saved "
-                                                 "and used once it is.")
-            self.add(g)
-
         g = Adw.PreferencesGroup(title="Look", description="Changes show on the desktop right away.")
         title = Adw.EntryRow(title="Title", text=self.cfg["title"], show_apply_button=True,
                              max_length=NOTES_TITLE_MAX,
@@ -271,15 +269,15 @@ def notebook_folder():
 class NotebookPage(DebouncedWrites, Page):
     key, title, icon = "notebook", "Notebook", "document-edit-symbolic"
 
+    @classmethod
+    def available(cls):
+        return NOTEBOOK_BIN.exists()
+
     def build(self):
         self.hook_unrealize()
         self.cfg = read_notebook_config()
         self._pending = None
         self._dirty = set()
-        if not NOTEBOOK_BIN.exists():
-            self.add(Adw.PreferencesGroup(description="Notebook isn't installed (expected at "
-                                          f"{NOTEBOOK_BIN}). These settings are saved and used once it is."))
-
         g = Adw.PreferencesGroup(title="Writing", description="An open Notebook follows these as you change them.")
         self.font_row = Adw.ActionRow(title="Font", subtitle=self.cfg["font"] or "The design's own")
         self.font_default = Gtk.Button(label="Default", valign=Gtk.Align.CENTER, css_classes=["flat"],

@@ -509,6 +509,11 @@ class Page(Adw.PreferencesPage):
     title = ""
     icon = ""
 
+    @classmethod
+    def available(cls):
+        """False hides the page (and its section, if that leaves it empty): a page for a tool that isn't installed would only confuse. Checked when the window opens."""
+        return True
+
     def __init__(self, win):
         super().__init__(title=self.title, icon_name=self.icon)
         self.win = win

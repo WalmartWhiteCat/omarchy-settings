@@ -1,6 +1,7 @@
 """Test harness: every path the app knows about points into tmp_path, and no subprocess
 other than `luac` may run. Nothing here may touch the live desktop."""
 
+import types
 import atexit
 import ctypes
 import json
@@ -181,6 +182,15 @@ def sandbox(tmp_path, monkeypatch, request):
         for name, value in paths.items():
             if hasattr(mod, name):
                 monkeypatch.setattr(mod, name, value)
+
+    for marker in ("NOTES_PLUGIN",):
+        paths[marker].mkdir(parents=True, exist_ok=True)       # the Tools pages only show for tools that are installed
+    for marker in ("NOTEBOOK_BIN", "OHM_BIN"):
+        paths[marker].parent.mkdir(parents=True, exist_ok=True)
+        paths[marker].write_text("")
+
+    # pages_ohm asks shutil.which whether moe-local is on the PATH; the machine's real one must not count in the tests (only that module's name is replaced)
+    monkeypatch.setattr(pages_ohm, "shutil", types.SimpleNamespace(which=lambda name: None))
 
     calls = Calls()
 

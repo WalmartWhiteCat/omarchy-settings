@@ -47,9 +47,9 @@ def sub(p, title):
 # ---------------------------------------------------------------- Control
 
 
-def test_not_installed_says_so(sandbox, open_page):
-    p = open_page("ohm")
-    assert any("isn't installed" in (g.get_description() or "") for g in p.rows(Adw.PreferencesGroup)) and not p.has_row("Keep the model off")
+def test_installed_but_not_answering_says_so(sandbox, open_page):
+    p = open_page("ohm")      # the sandbox has the command but it prints nothing
+    assert any("isn't answering" in (g.get_description() or "") for g in p.rows(Adw.PreferencesGroup)) and not p.has_row("Keep the model off")
 
 
 def test_status_comes_from_the_state_file(ohm, open_page):

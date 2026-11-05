@@ -132,6 +132,7 @@ Power and Bar, `hyprsunset.conf`, `colors.toml`, the pin hook, the wallpaper tim
 `config.json`), which tests read directly.
 
 ## Design decisions: don't "fix" these
+- **Pages for tools that aren't installed are hidden** (the user's request, 2026-11-05: friends new to Linux would be confused by entries that do nothing). The sidebar is a fixed list (`SECTIONS`, nothing is scanned for), but each page class answers `Page.available()` when the window opens and an unavailable page is left out, and a section with nothing left (Tools, on a machine with none of the tools) goes too. Desktop Notes: its plugin folder exists; Notebook: `~/.local/bin/omarchy-notebook`; the OHM pages: `moe-local` is there (the file or on the PATH). `--page X` for a hidden page opens the first page. An installed OHM that doesn't answer still shows its page, saying so (so it can be diagnosed). The Appearance, Display, Input and System pages always show. A new tool's page needs its own `available()`; the base class says True.
 - Each part of the generated Lua runs in its own `section()` pcall, so one bad entry can't break
   the rest of Hyprland's config.
 - Use the `omarchy` CLI wherever a command exists; never edit `/usr/share/omarchy`. Read it freely to
@@ -199,7 +200,7 @@ How the sandbox works (`tests/conftest.py`):
   it lists changes, so add new folders the app writes to as well. So the autouse `sandbox` fixture fills it: `tmp_path/home` (HOME, with
   only `.config/hypr`) and an empty `tmp_path/omarchy` exist when a test starts. To give a page a
   file to read, write it at the module's path, making its folder first (e.g.
-  `ps.SHELL_JSON.parent.mkdir(parents=True)`; `~/.config/omarchy` doesn't exist yet). Don't assume `tmp_path`
+  `ps.SHELL_JSON.parent.mkdir(parents=True, exist_ok=True)`; `~/.config/omarchy` exists, because the sandbox makes the Desktop Notes plugin folder in it). Don't assume `tmp_path`
   is empty. (`tests/test_install.py` uses `tmp_path` itself as the script's HOME, separate from
   the sandbox's `tmp_path/home`.) `run`, `run_async`, `run_chain`, `spawn_detached`, `trash_file` are
   stubbed and record their commands in the `sandbox` fixture (`sandbox.all_cmds()`;

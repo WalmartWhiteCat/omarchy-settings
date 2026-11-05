@@ -10,6 +10,7 @@ State is read from the files the controller writes (state.json, and the pause an
 
 import json
 import os
+import shutil
 import time
 
 from gi.repository import Adw, GLib, Gtk
@@ -80,6 +81,10 @@ def minutes_left(epoch):
 class OhmPage(DebouncedWrites, Page):
     """Base: fetches the settings, writes changes through `moe-local config set` (batched on a short timer), refreshes what it shows."""
 
+    @classmethod
+    def available(cls):
+        return OHM_BIN.exists() or shutil.which("moe-local") is not None
+
     def load(self):
         self.hook_unrealize()
         self._pending = None
@@ -89,8 +94,8 @@ class OhmPage(DebouncedWrites, Page):
         self.timer = None
         self.d = ohm_describe()
         if self.d is None:
-            self.add(Adw.PreferencesGroup(description="Qwen3.6-OHM isn't installed, or `moe-local` isn't answering "
-                                          f"(looked for {OHM_BIN}). Nothing here can be changed until it is."))
+            self.add(Adw.PreferencesGroup(description="Qwen3.6-OHM is installed but `moe-local` isn't answering. Try `moe-local doctor` in a terminal. "
+                                          "Nothing here can be changed until it answers."))
             return False
         self.cfg = self.d["config"]
         if not getattr(self, "_stop_hooked", False):
