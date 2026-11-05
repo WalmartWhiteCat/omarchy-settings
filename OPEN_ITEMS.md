@@ -11,7 +11,7 @@ Covered by tests with stand-ins, but never clicked through live:
   while the focus is in those results (tests check the focus and the key handler, not real key
   presses).
 - **Night light:** turning it on from hyprsunset's neutral state (after a restart or the schedule's end).
-- **Windows:** the "Omarchy's subtle transparency" switch making windows fully opaque.
+- **Windows (Omarchy 4.5):** the Window transparency drop-down (opaque, transparent, glassy) really changing windows, and the "Switch to Omarchy's Opaque setting" button for the old switch; checked only against stand-ins and the installed script.
 - **Bar (Omarchy 4.5):** the Background drop-down (opaque, transparent, glassy) and the three sections added in 4.5 (centerBegin, centerEnd, tray); only checked against stand-ins and the installed `omarchy bar --help`.
 - **Bar:** removing the Omarchy menu widget from the layout (assumes the bar shows only what's in
   its layout; if Omarchy re-adds enabled widgets, it would come back, harmlessly).

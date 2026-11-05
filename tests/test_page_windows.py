@@ -1,7 +1,11 @@
 """Windows page, built for real (see pagekit): layout and gaps, custom border colors and
-gradients, Omarchy's transparency switch, animations, and Restore defaults."""
+gradients, Omarchy's window transparency setting, animations, and Restore defaults."""
 
-from .pagekit import needs_display, open_page  # noqa: F401
+from gi.repository import Adw
+
+from osettings import pages_look as pl
+
+from .pagekit import callbacks, needs_display, open_page  # noqa: F401
 
 pytestmark = needs_display
 
@@ -49,15 +53,61 @@ def test_custom_border_colors(open_page):
     assert not p.row("Focused border").get_sensitive()
 
 
-def test_omarchys_transparency_switch(open_page):
+TRANSPARENCY = ("omarchy", "hyprland", "window", "transparency")
+
+
+def shown(combo):
+    return combo.get_model().get_string(combo.get_selected())
+
+
+def test_window_transparency_is_omarchys_own_setting(sandbox, open_page):
+    """Omarchy 4.5 keeps opaque / transparent / glassy itself (`omarchy hyprland window transparency`);
+    the page shows that and changes it there, and writes nothing of its own."""
+    sandbox.run_output[TRANSPARENCY] = "glassy\n"
     p = open_page("windows")
-    assert p.row("Omarchy's subtle transparency").get_active()
-    p.switch("Omarchy's subtle transparency", False)
+    assert shown(p.row("Window transparency", Adw.ComboRow)) == "Glassy"
+    p.choose("Window transparency", "Opaque")
+    assert sandbox.run_async[-1] == [*TRANSPARENCY, "opaque"]
+    p.choose("Window transparency", "Transparent")
+    assert sandbox.run_async[-1] == [*TRANSPARENCY, "transparent"]
+    p.choose("Window transparency", "Glassy")
+    assert sandbox.run_async[-1] == [*TRANSPARENCY, "glassy"]
     p.save()
-    assert p.saved()["flags"]["omarchy_opacity"] is False
-    p.switch("Omarchy's subtle transparency", True)
+    assert "omarchy_opacity" not in p.saved().get("flags", {})
+    assert "window transparency off" not in p.lua().lower()
+
+
+def test_window_transparency_defaults_to_transparent(sandbox, open_page):
+    assert shown(open_page("windows").row("Window transparency", Adw.ComboRow)) == "Transparent"
+
+
+def test_the_old_switch_is_offered_as_omarchys_opaque(sandbox, open_page, monkeypatch):
+    """Before 4.5 the page's own switch turned Omarchy's transparency off with a rule on a tag
+    (default-opacity) that no longer exists, so it quietly did nothing. The choice stays visible
+    until the user moves it to Omarchy's setting; nothing on the desktop changes unasked."""
+    got = callbacks(monkeypatch, pl)
+    p = open_page("windows", {"flags": {"omarchy_opacity": False}})
+    assert sandbox.all_cmds().count([*TRANSPARENCY, "opaque"]) == 0
+    p.press("Switch to Omarchy's Opaque setting")
+    cmd, done = got["async"][-1]
+    assert cmd == [*TRANSPARENCY, "opaque"]
+    done(0, "", "")
     p.save()
     assert "omarchy_opacity" not in p.saved()["flags"]
+    assert not p.has_row("Switch to Omarchy's Opaque setting")
+
+
+def test_a_failed_switch_keeps_the_old_choice(sandbox, open_page, monkeypatch):
+    got = callbacks(monkeypatch, pl)
+    p = open_page("windows", {"flags": {"omarchy_opacity": False}})
+    p.press("Switch to Omarchy's Opaque setting")
+    got["async"][-1][1](1, "", "boom")
+    p.save()
+    assert p.saved()["flags"]["omarchy_opacity"] is False
+
+
+def test_no_notice_without_the_old_choice(sandbox, open_page):
+    assert not open_page("windows").has_row("Switch to Omarchy's Opaque setting")
 
 
 def test_animations(open_page):

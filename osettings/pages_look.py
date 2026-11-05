@@ -687,11 +687,27 @@ class BackgroundPage(Page):
 
 
 WINDOW_PREFIXES = ("general:", "decoration:", "dwindle:", "master:", "scrolling:")
+WINDOW_TRANSPARENCY = ["omarchy", "hyprland", "window", "transparency"]
+TRANSPARENCY_MODES = [("Opaque", "opaque"), ("Transparent", "transparent"), ("Glassy", "glassy")]
 
 
 class WindowsPage(Page):
     key, title, icon = "windows", "Windows", "preferences-desktop-display-symbolic"
     LAYOUTS = ["dwindle", "master", "scrolling"]
+
+    def set_transparency(self, mode):
+        """Ask Omarchy for a window transparency mode. The pre-4.5 switch this page had is dropped
+        once Omarchy has taken the choice (a failed command keeps it, so nothing is lost)."""
+        store = self.win.store
+
+        def done(code, out, err):
+            if code != 0:
+                self.win.toast((err or out).strip()[:120] or "Couldn't change window transparency")
+                return
+            if store.flags.pop("omarchy_opacity", None) is not None:
+                store.schedule_save(after=self.rebuild)
+
+        run_async([*WINDOW_TRANSPARENCY, mode], done)
 
     def build(self):
         h = self.win.store
@@ -729,22 +745,26 @@ class WindowsPage(Page):
         self.border_rows(g)
         self.add(g)
 
-        g = Adw.PreferencesGroup(title="Transparency and dimming",
-                                 description="The opacity sliders apply on top of window rules, including "
-                                             "Omarchy's own, so 1.00 only means fully opaque with the switch "
-                                             "below turned off.")
-
-        def set_omarchy_opacity(on):
-            if on:
-                h.flags.pop("omarchy_opacity", None)
-            else:
-                h.flags["omarchy_opacity"] = False
-            h.schedule_save()
-
-        g.add(switch_row("Omarchy's subtle transparency",
-                         "Omarchy makes most windows 98.5% opaque when focused and 96% when not (browsers 100% "
-                         "and 98.5%). Turn off for fully opaque windows.",
-                         h.flags.get("omarchy_opacity") is not False, set_omarchy_opacity))
+        legacy = h.flags.get("omarchy_opacity") is False
+        g = Adw.PreferencesGroup(
+            title="Transparency and dimming",
+            description="The opacity sliders apply on top of window rules, including Omarchy's own, so 1.00 "
+                        "only means fully opaque for windows Omarchy doesn't make see-through."
+                        + (" Windows were set fully opaque here before Omarchy 4.5; that switch no longer "
+                           "does anything, so move it to Omarchy's own setting." if legacy else ""))
+        # Omarchy 4.5 keeps this itself (`omarchy hyprland window transparency`): opaque makes the
+        # windows it makes see-through (terminals and a few apps) solid, glassy also blurs behind them.
+        current = run(WINDOW_TRANSPARENCY).strip()
+        modes = [v for _, v in TRANSPARENCY_MODES]
+        g.add(combo_row("Window transparency",
+                        "Terminals and a few apps are see-through by default; opaque makes them solid and glassy "
+                        "blurs what is behind them. This is Omarchy's own setting.",
+                        [l for l, _ in TRANSPARENCY_MODES], current if current in modes else "transparent",
+                        self.set_transparency, modes))
+        if legacy:
+            move = Adw.ButtonRow(title="Switch to Omarchy's Opaque setting")
+            move.connect("activated", lambda _r: self.set_transparency("opaque"))
+            g.add(move)
         g.add(scale_row("Focused window opacity", None, 0.3, 1.0, 0.01, cur("decoration:active_opacity", 1.0), 2,
                         setter("decoration:active_opacity")))
         g.add(scale_row("Unfocused window opacity", None, 0.3, 1.0, 0.01,
