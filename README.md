@@ -41,15 +41,15 @@ somewhere that survives (not in the repo):
 On the fresh install:
 
 ```bash
-# 0. Both repos are private: sign in so git can clone them
-gh auth login && gh auth setup-git
-
-# 1. The app, where its notes expect it (the Desktop Notes widget's notes point here)
+# 1. The app (this repo is public, so no sign-in is needed), where its notes expect it
+#    (the Desktop Notes widget's notes point here)
 git clone https://github.com/WalmartWhiteCat/omarchy-settings.git ~/Work/omarchy-settings
 cd ~/Work/omarchy-settings && ./install.sh
 
-# 2. The Desktop Notes widget: Omarchy clones it into ~/.config/omarchy/plugins/sourced.desktop-notes
-#    and enables it (later, `omarchy plugin update` pulls new commits)
+# 2. The Desktop Notes widget (optional; its repo is private, so sign in first:
+#    `gh auth login && gh auth setup-git`, with access to that repo). Omarchy clones it into
+#    ~/.config/omarchy/plugins/sourced.desktop-notes and enables it (later, `omarchy plugin
+#    update` pulls new commits)
 omarchy plugin add https://github.com/WalmartWhiteCat/omarchy-desktop-notes.git --enable
 
 # 3. Your data (files already there are kept as <name>.~1~)
