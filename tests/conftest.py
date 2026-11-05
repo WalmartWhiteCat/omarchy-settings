@@ -85,7 +85,7 @@ from gi.repository import GLib  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from osettings import binds, core, pages_keys, pages_look, pages_ohm, pages_system, pages_widgets, store  # noqa: E402
+from osettings import binds, core, pages_keys, pages_look, pages_ohm, pages_ohm_admin, pages_system, pages_widgets, store  # noqa: E402
 
 # Property tests (tests/test_properties.py). "repeatable", the default, runs the same examples every
 # time, so ./test.sh gives the same answer; HYPOTHESIS_PROFILE=explore tries many new ones (and
@@ -106,7 +106,7 @@ REAL_OMARCHY = core.OMARCHY_PATH
 
 ALLOWED = {"luac"}
 US_KEYCODES = {**{9 + i: str(i % 10) for i in range(1, 11)}, 20: "minus", 21: "equal", 24: "q", 36: "return"}
-MODULES = (core, store, binds, pages_look, pages_system, pages_keys, pages_widgets, pages_ohm)
+MODULES = (core, store, binds, pages_look, pages_system, pages_keys, pages_widgets, pages_ohm, pages_ohm_admin)
 
 
 def _argv0(args):

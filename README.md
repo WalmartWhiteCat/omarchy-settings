@@ -9,7 +9,7 @@ your desktop's look and feel from one window instead of hand-editing config file
 | Display | Displays, Night Light, Fonts and Text, Cursor |
 | Input | Keyboard and Mouse, Keybindings |
 | System | Bar, Power and Notifications, Default Apps, Autostart |
-| Tools (only for what is installed) | Desktop Notes (look and position of the `sourced.desktop-notes` shell widget), Notebook (its settings and how it opens), Qwen3.6-OHM (OHM Control: the off switch, timed off, step lock, login start, games; OHM Memory & Steps: VRAM limits, steps, timings) |
+| Tools (only for what is installed) | Desktop Notes (look and position of the `sourced.desktop-notes` shell widget), Notebook (its settings and how it opens), Qwen3.6-OHM (OHM Control: the off switch, timed off, step lock, login start, games; OHM Memory & Steps: VRAM limits, steps, timings; OHM Model: switch between model files; OHM Prompt & Playbook; OHM Safety & Watcher; and a separate OHM Danger Zone for everything destructive, with typed confirmations) |
 
 Every page has a **Restore defaults** button, and the menu (☰) has **Restore all defaults…**.
 

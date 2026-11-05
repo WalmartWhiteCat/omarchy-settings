@@ -133,7 +133,7 @@ def test_the_page_is_under_tools(sandbox, open_page):
     from osettings import window
 
     sections = dict((name, [c.key for c in classes]) for name, classes in window.SECTIONS)
-    assert sections["Tools"] == ["notes", "notebook", "ohm", "ohm-memory"] and "Widgets" not in sections
+    assert sections["Tools"] == ["notes", "notebook", "ohm", "ohm-memory", "ohm-model", "ohm-prompt", "ohm-safety", "ohm-danger"] and "Widgets" not in sections
 
 
 def test_defaults_limits_and_choices_match_notebooks_own():
