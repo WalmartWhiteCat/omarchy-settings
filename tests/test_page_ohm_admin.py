@@ -14,14 +14,14 @@ pytestmark = needs_display
 CONFIG = {"vram": dict(VRAM), "game_mode": {"processes": []}, "model": {"path": "/m/Qwen-A.gguf", "alias": "qwen-moe", "context": 131072},
           "llama": {"extra_args": ["-b", "2048", "--mmproj", "/m/mmproj.gguf"], "slots": 4, "slot_similarity": 0.5, "pin_slots": True},
           "prompt": {"swift": True, "playbook": True, "facts": True, "safety": True}, "loop": {"max_tool_calls": 12, "max_tool_calls_thinking": 40, "break_with": "tool_choice", "ask_when_vague": True},
-          "verify": {"mode": "shadow", "slot": 3, "min_words": 12, "timeout_s": 12, "max_tokens": 300}, "budget": {"normal": [90, 150, 240], "code": [300, 480, 600], "crash": [300, 600, 900]},
+          "verify": {"mode": "shadow", "slot": 3, "min_words": 12, "timeout_s": 12, "max_tokens": 300, "gate": "off", "gate_min_missing": 2, "gate_lone_figures": True}, "budget": {"normal": [90, 150, 240], "code": [300, 480, 600], "crash": [300, 600, 900]},
           "protect": {"enabled": True, "screen": True, "extra_paths": ["~/Work/important"]}, "guard": {"mode": "off"},
           "sampling": {"enabled": False, **{f"{m}_{k}": v for m, vals in (("chat", (0.7, 0.8, 20, 0.0, 1.5)), ("think", (1.0, 0.95, 20, 0.0, 1.5)), ("code", (0.6, 0.95, 20, 0.0, 0.0)))
                                             for k, v in zip(("temperature", "top_p", "top_k", "min_p", "presence_penalty"), vals)}},
           "health": {"interval_s": 5, "fail_limit": 3, "crash_limit": 5, "crash_window_s": 600, "failed_retry_s": 600, "backoff_s": [5, 15]}}
 RANGES = {**{f"sampling.{m}_{k}": r for m in ("chat", "think", "code") for k, r in (("temperature", [0.0, 2.0]), ("top_p", [0.0, 1.0]), ("top_k", [0, 200]), ("min_p", [0.0, 1.0]), ("presence_penalty", [-2.0, 2.0]))},
           "model.context": [4096, 262144], "loop.max_tool_calls": [1, 200], "loop.max_tool_calls_thinking": [1, 500], "verify.min_words": [1, 500], "verify.timeout_s": [1, 120],
-          "verify.max_tokens": [50, 2000], "health.interval_s": [0.1, 60], "health.fail_limit": [1, 20], "health.crash_limit": [1, 50], "health.crash_window_s": [5, 3600],
+          "verify.max_tokens": [50, 2000], "verify.gate_min_missing": [1, 10], "health.interval_s": [0.1, 60], "health.fail_limit": [1, 20], "health.crash_limit": [1, 50], "health.crash_window_s": [5, 3600],
           "health.failed_retry_s": [1, 7200], "llama.slots": [1, 8], "llama.slot_similarity": [0.0, 1.0]}
 MODELS = {"models": [{"path": "/m/Qwen-A.gguf", "name": "Qwen-A.gguf", "size_mib": 13000, "current": True, "valid": True},
                      {"path": "/m/Qwen-B.gguf", "name": "Qwen-B.gguf", "size_mib": 17000, "current": False, "valid": True},
@@ -35,7 +35,7 @@ def ohm(sandbox, monkeypatch, tmp_path):
     d = describe()
     d["config"] = json.loads(json.dumps(CONFIG))
     d["ranges"] = {**d["ranges"], **RANGES}
-    d["enums"] = {"loop.break_with": ["tool_choice", "drop_tools"], "verify.mode": ["off", "shadow", "append"], "guard.mode": ["off", "readonly"]}
+    d["enums"] = {"loop.break_with": ["tool_choice", "drop_tools"], "verify.mode": ["off", "shadow", "append"], "verify.gate": ["off", "mark"], "guard.mode": ["off", "readonly"]}
     out = sandbox.run_output
     out[("ohm", "config", "--json")] = json.dumps(d)
     out[("ohm", "autostart", "status")] = "starts at login: yes"
@@ -183,6 +183,23 @@ def test_the_second_opinion(ohm, open_page, sandbox):
     p.choose("Mode", "Append a note to the answer")
     assert sets(sandbox, "verify.mode")[-1][4] == '"append"'
     assert p.has_row("What it has found lately")
+
+
+def test_the_sentence_gate_is_switched_here_and_hidden_for_an_older_ohm(ohm, open_page, sandbox):
+    p = page(open_page, sandbox, "ohm-prompt")
+    assert shown(p.row("Mark unsupported sentences", Adw.ComboRow)) == "Off"
+    p.choose("Mark unsupported sentences", "Mark them in the answer")
+    assert sets(sandbox, "verify.gate")[-1] == ["ohm", "config", "set", "verify.gate", '"mark"']
+    p.number("Names or numbers a sentence needs to lack", 3); p.page.flush_pending()
+    assert sets(sandbox, "verify.gate_min_missing")[-1][4] == "3"
+    p.switch("Also mark one invented figure", False); assert sets(sandbox, "verify.gate_lone_figures")[-1][4] == "false"
+
+
+def test_the_sentence_gate_rows_are_absent_when_ohm_does_not_know_the_setting(ohm, open_page, sandbox):
+    d = json.loads(sandbox.run_output[("ohm", "config", "--json")])
+    for k in ("gate", "gate_min_missing", "gate_lone_figures"): d["config"]["verify"].pop(k)
+    sandbox.run_output[("ohm", "config", "--json")] = json.dumps(d)
+    p = page(open_page, sandbox, "ohm-prompt"); assert not p.has_row("Mark unsupported sentences")
 
 
 def test_lessons_are_accepted_or_rejected_by_you(ohm, open_page, sandbox):

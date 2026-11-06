@@ -159,6 +159,15 @@ class OhmPromptPage(OhmPage):
         self.num(g, "verify.timeout_s", "Give the check this long", "Seconds, in Append mode", 1)
         self.num(g, "verify.max_tokens", "Longest reply the check may write", "Tokens", 50)
         self.add(g)
+        if "gate" in self.cfg["verify"]:          # an older ohm has no sentence gate: nothing to show
+            g = Adw.PreferencesGroup(title="Sentence marks", description="While an answer that used web pages is written, a sentence that names things none of the pages contain gets a short "
+                                     "note after it. Nothing is rewritten and no extra time is spent. It needs the second opinion's mode above to be anything but Off.")
+            g.add(combo_row("Mark unsupported sentences", "Off is the default", ["Off", "Mark them in the answer"], self.cfg["verify"]["gate"], lambda v: self.set_now("verify.gate", v),
+                            list(d.get("verify.gate", ["off", "mark"]))))
+            self.num(g, "verify.gate_min_missing", "Names or numbers a sentence needs to lack", "Higher marks less, 2 is the tested setting", 1)
+            if "gate_lone_figures" in self.cfg["verify"]:
+                self.flag(g, "verify.gate_lone_figures", "Also mark one invented figure", "A single number (a decimal, or four digits that is not a year) no page contains")
+            self.add(g)
         self.verdicts = Adw.ExpanderRow(title="What it has found lately")
         out = run(["ohm", "verify", "-n", "3"])
         label = Gtk.Label(label=out or "Nothing yet.", xalign=0, wrap=True, selectable=True, margin_top=8, margin_bottom=8, margin_start=12, margin_end=12)
