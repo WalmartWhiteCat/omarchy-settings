@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Omarchy Settings
+Comment=Themes, windows, displays, input, keybindings, autostart, bar and more
+Exec=AppRun
+Icon=omarchy-settings
+Categories=Settings;DesktopSettings;
+StartupWMClass=org.omarchy.Settings
+Terminal=false

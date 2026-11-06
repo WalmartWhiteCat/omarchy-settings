@@ -1,0 +1,60 @@
+#!/bin/sh
+# Starts Omarchy Settings from inside the AppImage (see build-appimage.sh, README "AppImage").
+#
+# The AppImage carries only the app's own code. Python, GTK 4 and libadwaita come from the system,
+# because the app edits the live Omarchy desktop and has to follow its real GTK, dconf and theme
+# settings; a bundled copy would not. Omarchy ships all three.
+#
+#   Omarchy_Settings-x86_64.AppImage [--page KEY]   run the app
+#   ... --install-launcher                           add it to the app launcher
+#   ... --remove-launcher                            take it out again
+set -eu
+
+HERE=$(dirname "$(readlink -f "$0")")
+APP="$HERE/usr/share/omarchy-settings/omarchy-settings.py"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+LAUNCHER="$DATA/applications/omarchy-settings.desktop"
+ICON="$DATA/icons/hicolor/scalable/apps/omarchy-settings.svg"
+
+fail() {
+  echo "Omarchy Settings: $1" >&2
+  command -v notify-send >/dev/null 2>&1 && notify-send -a "Omarchy Settings" "Omarchy Settings can't start" "$1" || true
+  exit 1
+}
+
+case "${1:-}" in
+  --install-launcher)
+    [ -n "${APPIMAGE:-}" ] || fail "Run this from the AppImage file itself, not from an unpacked copy."
+    mkdir -p "$(dirname "$LAUNCHER")" "$(dirname "$ICON")"
+    cp "$HERE/omarchy-settings.svg" "$ICON"
+    # The launcher points at the file as it is now: run this again if the AppImage moves.
+    cat >"$LAUNCHER" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Omarchy Settings
+Comment=Themes, windows, displays, input, keybindings, autostart, bar and more
+Exec="$APPIMAGE"
+Icon=omarchy-settings
+Categories=Settings;DesktopSettings;
+StartupWMClass=org.omarchy.Settings
+DESKTOP
+    echo "Added Omarchy Settings to the app launcher ($LAUNCHER)."
+    exit 0
+    ;;
+  --remove-launcher)
+    rm -f "$LAUNCHER" "$ICON"
+    echo "Removed Omarchy Settings from the app launcher."
+    exit 0
+    ;;
+esac
+
+# The system Python first: a version manager's python3 (mise, pyenv) has no PyGObject.
+PY="${OMARCHY_SETTINGS_PYTHON:-}"
+[ -n "$PY" ] || { [ -x /usr/bin/python3 ] && PY=/usr/bin/python3; } || PY=$(command -v python3 || true)
+[ -n "$PY" ] || fail "Python 3 isn't installed (sudo pacman -S python)."
+
+"$PY" -c 'import gi; gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1")' 2>/dev/null \
+  || fail "GTK 4 / libadwaita for Python isn't installed (sudo pacman -S python-gobject gtk4 libadwaita)."
+
+# -B: the AppImage is read-only, so there is nowhere to cache bytecode.
+exec "$PY" -B "$APP" "$@"

@@ -20,6 +20,7 @@ Covered by tests with stand-ins, but never clicked through live:
 - **Background videos (Omarchy 4.5):** a video in the grid, set live, and its thumbnail (the thumbnailer was run for real on a made-up video, but the grid and `omarchy theme bg set` on a video never were).
 - **Background:** Automatic change's switch and interval against the real timer.
 - **Restore all defaults** end to end.
+- **AppImage (2026-11-06):** built and run only in a sandbox on this machine. Never run on a second machine, never launched from the real app launcher via `--install-launcher`, and the Desktop Notes widget's settings button doesn't find it (it runs `omarchy-settings` from the PATH).
 - **Desktop Notes:** the page's sliders and position moving the widget live. (The widget's settings
   button was confirmed live on 2026-10-09: it opens the app on this page when closed, and brings it
   forward on this page when open on another workspace.)

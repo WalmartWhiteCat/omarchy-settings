@@ -38,6 +38,27 @@ This is the user's own daily desktop. What they've asked for, across past sessio
 - **Notes:** keep these notes true (below) as part of every change.
 - **Pushing:** commits go to `origin` (GitHub, public) only when the user asks.
 
+## AppImage
+
+`./build-appimage.sh` makes `dist/Omarchy_Settings-x86_64.AppImage` (both git-ignored, as is
+`.appimage-cache/`, where the pinned runtime is kept) for people who just want to run the app.
+It is deliberately **thin**: only the app's code (`omarchy-settings.py` and `osettings/*.py`,
+no tests, no bytecode) goes in. Python, PyGObject, GTK 4 and libadwaita come from the system.
+Don't bundle GTK: the app drives the host's gsettings, theme and Omarchy commands, and a bundled
+GTK would ignore the host's dconf and leak library paths into the commands it starts. The files
+are in `packaging/appimage/`: `AppRun` (checks the system's GTK stack and says what to install if
+it's missing; prefers `/usr/bin/python3` since a version manager's python has no `gi`;
+`OMARCHY_SETTINGS_PYTHON` overrides it; runs `python3 -B` because the image is read-only; also
+`--install-launcher` / `--remove-launcher`, which write the launcher and icon under
+`~/.local/share`), `omarchy-settings.desktop` (its `StartupWMClass` is the app id) and the icon.
+The runtime is pinned to a release and a SHA-256 (`test_appimage` checks the pin is a real release,
+not `continuous`); update both together. `--stage DIR` lays out the AppDir without building, which
+is what `tests/test_appimage.py` uses (the image itself isn't built in tests: it needs a download).
+Checked on 2026-11-06: built, ran under Broadway in an empty HOME with Hyprland and D-Bus
+unreachable, and the launcher flags worked. Not checked: the image on another machine, in the
+real launcher, or through the Desktop Notes widget (its settings button runs `omarchy-settings`
+on the PATH, which the AppImage doesn't provide).
+
 ## Setting up on a fresh machine
 
 README.md, "Moving to a fresh install", has the steps: clone github.com/WalmartWhiteCat/omarchy-settings
@@ -127,7 +148,7 @@ sidebar section: `pages_system.py` holds Display and Input pages too.
 
 Other test files: `test_store.py` (loading, saving, the set-aside settings.json), `test_render.py`
 (the generated Lua for each store section: values, cursor, monitors, rules, binds, autostart), `test_lua.py` (Lua escaping), `test_properties.py` (property tests: any settings.json, the Lua escaping read back by real Lua, rule regexes, shortcut spellings), `test_files.py` (`write_atomic`), `test_processes.py` (command timeouts), `test_core_helpers.py` (the real `run`, `run_ok`, `run_chain`, `spawn_detached`, `hypr_option`, `trash_file`, which the sandbox stubs elsewhere, with subprocess faked underneath; colors, images, theme previews), `test_window.py` (the
-real window and `--page`), `test_install.py` (install.sh). README's "Files it writes" table lists
+real window and `--page`), `test_install.py` (install.sh), `test_appimage.py` (the AppImage's layout and AppRun). README's "Files it writes" table lists
 every file the app touches and how to undo it.
 
 Every page has page-level tests. The `test_page_*.py` files build the real page and cover the

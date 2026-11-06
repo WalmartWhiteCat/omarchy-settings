@@ -27,6 +27,23 @@ python3 omarchy-settings.py   # or run it directly
 omarchy-settings --page notes # open on a page (install.sh links the command into ~/.local/bin)
 ```
 
+### AppImage (for someone who just wants to use it)
+
+```bash
+./build-appimage.sh                                   # makes dist/Omarchy_Settings-x86_64.AppImage (about 1 MB)
+chmod +x Omarchy_Settings-x86_64.AppImage             # on the machine that will run it
+./Omarchy_Settings-x86_64.AppImage                    # run it; also takes --page KEY
+./Omarchy_Settings-x86_64.AppImage --install-launcher # adds it to the app launcher (--remove-launcher undoes it)
+```
+
+The AppImage holds only the app's own code. Python, PyGObject, GTK 4 and libadwaita come from the
+system (Omarchy has them), so the app follows the real desktop's theme and settings, as the
+installed version does; if one is missing it says what to install. Keep the file where it is: the
+launcher points at it, so run `--install-launcher` again after moving it. Building needs
+`squashfs-tools` and, the first time, internet for the AppImage runtime (pinned to a release and a
+SHA-256 in `build-appimage.sh`, cached in `.appimage-cache/`). To remove the app, delete the file
+and run `--remove-launcher` first; the settings it wrote are listed under "Uninstall completely".
+
 ## Moving to a fresh install
 
 Your settings and notes aren't in git. Before reinstalling, save them, and keep the archive
