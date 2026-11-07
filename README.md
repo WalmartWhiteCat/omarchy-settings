@@ -20,6 +20,20 @@ An Omarchy install with Hyprland's Lua config (Hyprland 0.55+). Everything else 
 
 ## Install and run
 
+### On a fresh Omarchy machine
+
+```bash
+sudo pacman -S --needed git                 # usually there already
+git clone https://github.com/WalmartWhiteCat/omarchy-settings.git ~/Work/omarchy-settings      # public: no sign-in needed
+cd ~/Work/omarchy-settings && ./install.sh
+```
+
+`./install.sh` checks what it needs, offers to install any missing system package with one `pacman` command (`--yes`: don't ask), and then adds the
+launcher, plus an `omarchy-settings` command. It runs the app **from this folder**, so keep it where it is (`~/Work/omarchy-settings`). To update:
+`cd ~/Work/omarchy-settings && git pull && ./install.sh`. To remove: `./install.sh --uninstall`.
+
+Already have the folder?
+
 ```bash
 ./install.sh            # adds "Omarchy Settings" to the app launcher and an omarchy-settings command
 ./install.sh --uninstall

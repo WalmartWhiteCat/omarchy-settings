@@ -9,9 +9,9 @@ SCRIPT = ROOT / "install.sh"
 TARGET = ROOT / "omarchy-settings.py"
 
 
-def install(home, *args):
+def install(home, *args, extra_env=None):
     # subprocess.run goes through the guarded Popen, so use the real one directly.
-    env = {**os.environ, "HOME": str(home), "XDG_DATA_HOME": str(home / ".local/share")}
+    env = {**(extra_env or os.environ), "HOME": str(home), "XDG_DATA_HOME": str(home / ".local/share")}
     p = REAL_POPEN(["bash", str(SCRIPT), *args], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     out, err = p.communicate(timeout=60)
     return subprocess.CompletedProcess(p.args, p.returncode, out, err)
@@ -137,3 +137,37 @@ def test_uninstall_when_nothing_is_installed_claims_nothing(tmp_path):
     assert r.stdout == "" and r.stderr == ""
     assert not launcher.exists() and not command.exists() and not command.is_symlink()
     assert not (tmp_path / ".local").exists()  # (tmp_path also holds conftest's sandbox folders)
+
+
+def fake_tools(tmp_path, missing):
+    """A python3 that says `missing` (a module name in the version check) is absent until the fake pacman has run, a sudo that just runs its arguments and a pacman that records them."""
+    import os, shutil
+    fb = tmp_path / "fakebin"; fb.mkdir()
+    real = shutil.which("python3")
+    (fb / "python3").write_text(f'#!/bin/bash\nif [[ "$*" == *\'{missing}\'* || "$*" == *\\"{missing}\\"* ]] && [[ ! -e "{tmp_path}/pacman-ran" ]]; then exit 1; fi\nexec {real} "$@"\n')
+    (fb / "sudo").write_text('#!/bin/bash\nexec "$@"\n')
+    (fb / "pacman").write_text(f'#!/bin/bash\necho "$@" >> "{tmp_path}/pacman.log"\ntouch "{tmp_path}/pacman-ran"\n')
+    for f in fb.iterdir(): f.chmod(0o755)
+    return {**os.environ, "PATH": f"{fb}:{os.environ['PATH']}"}
+
+
+def test_a_missing_package_is_installed_with_yes(tmp_path):
+    env = fake_tools(tmp_path, "Adw")
+    r = install(tmp_path, "--yes", extra_env=env)
+    assert r.returncode == 0, r.stderr
+    assert "-S --needed libadwaita" in (tmp_path / "pacman.log").read_text()
+    assert paths(tmp_path)[1].is_symlink()
+
+
+def test_a_missing_package_without_yes_or_a_terminal_only_prints_the_command(tmp_path):
+    env = fake_tools(tmp_path, "Adw")
+    r = install(tmp_path, extra_env=env)
+    assert r.returncode == 1
+    assert "sudo pacman -S --needed libadwaita" in r.stderr and "--yes" in r.stderr
+    assert not (tmp_path / "pacman.log").exists() and not paths(tmp_path)[1].exists()
+
+
+def test_help_and_unknown_options(tmp_path):
+    assert "--yes" in install(tmp_path, "--help").stdout
+    bad = install(tmp_path, "--nope")
+    assert bad.returncode == 2 and "Unknown option" in bad.stderr

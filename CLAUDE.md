@@ -61,7 +61,7 @@ on the PATH, which the AppImage doesn't provide).
 
 ## Setting up on a fresh machine
 
-README.md, "Moving to a fresh install", has the steps: clone github.com/WalmartWhiteCat/omarchy-settings
+`install.sh` takes `--yes` / `--uninstall` / `--help`; a missing system package (python-gobject, gtk4, libadwaita) is named and offered as one `sudo pacman -S --needed` (asked first, or `--yes`; without a terminal it prints the command and exits 1 before changing anything; `tests/test_install.py` uses a fake python3/sudo/pacman). The README opens "Install and run" with the fresh-machine steps. README.md, "Moving to a fresh install", has the steps: clone github.com/WalmartWhiteCat/omarchy-settings
 (public, so no sign-in) to `~/Work/omarchy-settings` (the Desktop Notes widget's notes point here),
 `./install.sh`, optionally install the widget (its repo is private, so `gh auth login && gh auth
 setup-git` first) with
